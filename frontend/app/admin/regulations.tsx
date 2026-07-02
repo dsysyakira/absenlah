@@ -1,0 +1,107 @@
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router";
+import { useI18n } from "@/src/i18n";
+import { api } from "@/src/api/client";
+import { Button, H2, Muted } from "@/src/ui/kit";
+import { colors, radii, spacing } from "@/src/ui/theme";
+import { showToast } from "@/src/ui/Toast";
+
+export default function RegulationsAdmin() {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api.get<{ content: string }>("/regulations");
+      setContent(r.content || "");
+    } catch (e: any) {
+      showToast(e?.message || "Load failed", "error");
+    }
+  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/regulations", { content });
+      showToast(t("saved"), "success");
+    } catch (e: any) {
+      showToast(e?.message || t("error"), "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} testID="back-button">
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        <H2>{t("regulations")}</H2>
+        <View style={{ width: 22 }} />
+      </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Muted>Markdown/plain text</Muted>
+          <TextInput
+            value={content}
+            onChangeText={setContent}
+            multiline
+            style={styles.textarea}
+            testID="regulations-textarea"
+          />
+          <Button
+            title={t("save_regulations")}
+            size="lg"
+            onPress={save}
+            loading={saving}
+            testID="save-regulations-button"
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
+  textarea: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    minHeight: 320,
+    textAlignVertical: "top",
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+  },
+});
