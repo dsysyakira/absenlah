@@ -117,6 +117,12 @@ export default function ProfileScreen() {
             <H3>{t("supervisor")}</H3>
             <MenuItem
               icon="checkmark-done-outline"
+              label={t("approvals_inbox")}
+              onPress={() => router.push("/supervisor/approvals")}
+              testID="menu-approvals"
+            />
+            <MenuItem
+              icon="clipboard-outline"
               label={t("manual_attendance")}
               onPress={() => router.push("/supervisor/manual")}
               testID="menu-manual-attendance"

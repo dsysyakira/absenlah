@@ -65,6 +65,10 @@ export default function RulesAdmin() {
         leave_min_hours_before_shift:
           parseInt(String(cfg.leave_min_hours_before_shift), 10) || 2,
         manual_arrival_limit_hours: parseInt(String(cfg.manual_arrival_limit_hours), 10) || 2,
+        lateness_monthly_quota: parseInt(String(cfg.lateness_monthly_quota), 10) || 3,
+        emergency_quota_period_months:
+          parseInt(String(cfg.emergency_quota_period_months), 10) || 6,
+        emergency_quota_limit: parseInt(String(cfg.emergency_quota_limit), 10) || 2,
       };
       const updated = await api.put("/config", payload);
       setCfg(updated);
@@ -300,6 +304,34 @@ export default function RulesAdmin() {
                 onChangeText={(v) => update("manual_arrival_limit_hours", v)}
                 keyboardType="numeric"
                 testID="rule-manual-limit"
+              />
+            </RowGrid>
+          </Card>
+
+          {/* Quotas */}
+          <Card style={{ gap: spacing.md }}>
+            <H3>{t("lateness_quota")} & {t("emergency_quota")}</H3>
+            <Input
+              label={t("lateness_monthly_quota")}
+              value={String(cfg.lateness_monthly_quota ?? 3)}
+              onChangeText={(v) => update("lateness_monthly_quota", v)}
+              keyboardType="numeric"
+              testID="rule-lateness-quota"
+            />
+            <RowGrid>
+              <Input
+                label={t("emergency_quota_period_months")}
+                value={String(cfg.emergency_quota_period_months ?? 6)}
+                onChangeText={(v) => update("emergency_quota_period_months", v)}
+                keyboardType="numeric"
+                testID="rule-emergency-period"
+              />
+              <Input
+                label={t("emergency_quota_limit")}
+                value={String(cfg.emergency_quota_limit ?? 2)}
+                onChangeText={(v) => update("emergency_quota_limit", v)}
+                keyboardType="numeric"
+                testID="rule-emergency-limit"
               />
             </RowGrid>
           </Card>

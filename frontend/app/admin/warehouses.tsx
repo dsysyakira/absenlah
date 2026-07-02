@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
+import * as Location from "expo-location";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
@@ -25,6 +26,36 @@ export default function WarehousesAdmin() {
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [locBusy, setLocBusy] = useState(false);
+
+  const useCurrentLocation = async () => {
+    setLocBusy(true);
+    try {
+      const perm = await Location.getForegroundPermissionsAsync();
+      let granted = perm.granted;
+      if (!granted && perm.canAskAgain) {
+        const req = await Location.requestForegroundPermissionsAsync();
+        granted = req.granted;
+      }
+      if (!granted) {
+        showToast(t("location_permission_denied"), "error");
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      setForm((f: any) => ({
+        ...f,
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      }));
+      showToast(t("saved"), "success");
+    } catch (e: any) {
+      showToast(e?.message || t("error"), "error");
+    } finally {
+      setLocBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -174,6 +205,13 @@ export default function WarehousesAdmin() {
                 onChangeText={(v) => setForm({ ...form, longitude: v })}
                 keyboardType="numeric"
                 testID="warehouse-form-lng"
+              />
+              <Button
+                title={t("use_current_location")}
+                variant="outline"
+                onPress={useCurrentLocation}
+                loading={locBusy}
+                testID="use-current-location-button"
               />
               <Input
                 label={t("radius_meters")}

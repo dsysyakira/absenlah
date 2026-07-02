@@ -162,6 +162,9 @@ class ConfigIn(BaseModel):
     late_step_after_tiers_amount: int = 10000
     leave_min_hours_before_shift: int = 2
     manual_arrival_limit_hours: int = 2
+    lateness_monthly_quota: int = 3  # allowance before penalty deduction ramps
+    emergency_quota_period_months: int = 6
+    emergency_quota_limit: int = 2
 
 
 class WarehouseUpdate(BaseModel):
@@ -195,6 +198,22 @@ class ManualAttendanceIn(BaseModel):
 class LeaveIn(BaseModel):
     date: str  # YYYY-MM-DD
     reason: str
+
+
+class EarlyDepartureReviewIn(BaseModel):
+    approve: bool
+    review_note: Optional[str] = None
+
+
+class EmergencyIn(BaseModel):
+    date: str  # YYYY-MM-DD
+    reason: str
+    proof_base64: str  # data URL or raw base64 of the proof image
+
+
+class EmergencyReviewIn(BaseModel):
+    approve: bool
+    review_note: Optional[str] = None
 
 
 # ---------- Seed ----------
@@ -233,6 +252,9 @@ DEFAULT_CONFIG = {
     "early_departure_monthly_limit": 3,
     "leave_min_hours_before_shift": 2,
     "manual_arrival_limit_hours": 2,
+    "lateness_monthly_quota": 3,
+    "emergency_quota_period_months": 6,
+    "emergency_quota_limit": 2,
     "updated_at": datetime.now(timezone.utc).isoformat(),
 }
 
@@ -362,7 +384,12 @@ def haversine_m(lat1, lon1, lat2, lon2) -> float:
 
 async def get_config() -> Dict[str, Any]:
     cfg = await db.config.find_one({"id": "global"}, {"_id": 0})
-    return cfg or DEFAULT_CONFIG
+    merged = {**DEFAULT_CONFIG, **(cfg or {})}
+    # If any new keys are missing on the persisted doc, fill them from defaults
+    for k, v in DEFAULT_CONFIG.items():
+        if merged.get(k) is None:
+            merged[k] = v
+    return merged
 
 
 def compute_late_fine(minutes_past_shift_start: int, cfg: Dict) -> Dict[str, Any]:
@@ -732,13 +759,10 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
     if effective_end.tzinfo is None:
         effective_end = effective_end.replace(tzinfo=WIB)
 
-    # Early departure logic (only when NOT early check-in dynamic shift?)
-    # Interpretation: early departure rule always applies to normal shift.
+    # Early departure detection — final approval deferred to supervisor workflow.
     early_departure = False
     early_departure_deduction = 0
     if not att.get("is_early_check_in"):
-        earliest_t = parse_hhmm(cfg["early_departure_earliest"])
-        earliest_dt = now.replace(hour=earliest_t.hour, minute=earliest_t.minute, second=0, microsecond=0)
         shift_end_t = parse_hhmm(cfg["shift_end"])
         shift_end_dt = now.replace(hour=shift_end_t.hour, minute=shift_end_t.minute, second=0, microsecond=0)
         if now < shift_end_dt:
@@ -748,18 +772,33 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
     ot_min = max(0, minutes_between(effective_end, now))
     ot = compute_overtime(ot_min, cfg)
 
-    # If early departure — check monthly counter
+    # If early departure — DO NOT increment counter or apply deduction here.
+    # Instead create a pending early_departure_request that supervisor must approve.
     month = month_wib_str()
+    early_departure_deduction = 0
+    early_departure_status = None
+    early_departure_request_id = None
     if early_departure:
-        stats = await db.user_stats.find_one({"user_id": user["id"], "month": month}) or {}
-        current_count = stats.get("early_departure_count", 0)
-        # Leaving before earliest permitted early departure time — always deduct bonus
-        earliest_t = parse_hhmm(cfg["early_departure_earliest"])
-        earliest_dt = now.replace(hour=earliest_t.hour, minute=earliest_t.minute, second=0, microsecond=0)
-        if now < earliest_dt:
-            early_departure_deduction = cfg["on_time_bonus"]
-        elif current_count + 1 > cfg["early_departure_monthly_limit"]:
-            early_departure_deduction = cfg["on_time_bonus"]
+        early_departure_status = "pending"
+        early_departure_request_id = str(uuid.uuid4())
+        await db.early_departure_requests.insert_one(
+            {
+                "id": early_departure_request_id,
+                "user_id": user["id"],
+                "user_name": user["name"],
+                "division": user.get("division"),
+                "position": user.get("position"),
+                "attendance_id": att["id"],
+                "date": today,
+                "requested_check_out_at": now.isoformat(),
+                "reason": None,
+                "status": "pending",
+                "reviewed_by": None,
+                "reviewed_at": None,
+                "deduction_applied": 0,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
     updates = {
         "check_out_at": now.isoformat(),
@@ -768,19 +807,16 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
         "overtime_minutes": ot["overtime_minutes"],
         "overtime_amount": ot["amount"],
         "early_departure": early_departure,
+        "early_departure_status": early_departure_status,
+        "early_departure_request_id": early_departure_request_id,
         "early_departure_deduction": early_departure_deduction,
         "status": "completed",
     }
     await db.attendance.update_one({"id": att["id"]}, {"$set": updates})
 
-    # Update stats
-    inc = {"total_overtime": ot["amount"]}
-    if early_departure:
-        inc["early_departure_count"] = 1
-    if early_departure_deduction:
-        inc["total_penalty"] = early_departure_deduction
-        inc["total_bonus"] = -early_departure_deduction
-    await bump_user_stats(user["id"], month, **inc)
+    # Update stats — overtime always counts; early departure count/deduction defer to approval.
+    if ot["amount"]:
+        await bump_user_stats(user["id"], month, total_overtime=ot["amount"])
 
     att.update(updates)
     att.pop("_id", None)
@@ -996,6 +1032,256 @@ async def division_leaves(user: Dict = Depends(get_current_user)):
 async def my_leaves(user: Dict = Depends(get_current_user)):
     cursor = db.leave_requests.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1)
     return [d async for d in cursor]
+
+
+# ---------- Early Departure Approval ----------
+@api.get("/early-departure/me")
+async def my_early_departures(user: Dict = Depends(get_current_user)):
+    cursor = db.early_departure_requests.find({"user_id": user["id"]}, {"_id": 0}).sort("date", -1)
+    return [d async for d in cursor]
+
+
+@api.get("/early-departure/pending")
+async def pending_early_departures(_: Dict = Depends(require_supervisor_or_admin)):
+    cursor = (
+        db.early_departure_requests.find({"status": "pending"}, {"_id": 0}).sort("created_at", 1)
+    )
+    return [d async for d in cursor]
+
+
+@api.post("/early-departure/{req_id}/review")
+async def review_early_departure(
+    req_id: str, payload: EarlyDepartureReviewIn, actor: Dict = Depends(require_supervisor_or_admin)
+):
+    doc = await db.early_departure_requests.find_one({"id": req_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Permintaan tidak ditemukan")
+    if doc["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Permintaan sudah direview")
+
+    cfg = await get_config()
+    month = doc["date"][:7]  # YYYY-MM
+    new_status = "approved" if payload.approve else "rejected"
+    deduction = 0
+    stats_inc: Dict[str, int] = {}
+
+    if payload.approve:
+        # Count current approved early departures in same month for this user
+        approved_this_month = await db.early_departure_requests.count_documents(
+            {"user_id": doc["user_id"], "status": "approved", "date": {"$regex": f"^{month}"}}
+        )
+        will_exceed = (approved_this_month + 1) > cfg.get("early_departure_monthly_limit", 3)
+        # Also: if requested check-out time was before earliest allowed early-departure time -> deduct
+        requested_dt = datetime.fromisoformat(doc["requested_check_out_at"])
+        if requested_dt.tzinfo is None:
+            requested_dt = requested_dt.replace(tzinfo=WIB)
+        earliest_t = parse_hhmm(cfg.get("early_departure_earliest", "17:00"))
+        earliest_dt = requested_dt.replace(
+            hour=earliest_t.hour, minute=earliest_t.minute, second=0, microsecond=0
+        )
+        too_early = requested_dt < earliest_dt
+        if will_exceed or too_early:
+            deduction = cfg.get("on_time_bonus", 0)
+        stats_inc = {"early_departure_count": 1}
+        if deduction:
+            stats_inc["total_penalty"] = deduction
+            stats_inc["total_bonus"] = -deduction
+    else:
+        # Rejected: treated as unauthorized early departure - apply deduction, do NOT increment counter
+        deduction = cfg.get("on_time_bonus", 0)
+        stats_inc = {"total_penalty": deduction, "total_bonus": -deduction}
+
+    await db.early_departure_requests.update_one(
+        {"id": req_id},
+        {
+            "$set": {
+                "status": new_status,
+                "reviewed_by": actor["id"],
+                "reviewed_by_name": actor["name"],
+                "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                "review_note": payload.review_note,
+                "deduction_applied": deduction,
+            }
+        },
+    )
+    # Update attendance record so it reflects final decision
+    await db.attendance.update_one(
+        {"id": doc["attendance_id"]},
+        {"$set": {"early_departure_status": new_status, "early_departure_deduction": deduction}},
+    )
+    await bump_user_stats(doc["user_id"], month, **stats_inc)
+
+    # Notify the user
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": doc["user_id"],
+            "division": doc.get("division"),
+            "message": f"Pulang cepat {doc['date']} {new_status.upper()} oleh {actor['name']}",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    updated = await db.early_departure_requests.find_one({"id": req_id}, {"_id": 0})
+    return updated
+
+
+# ---------- Emergency Quota ----------
+def _emergency_period_bounds(cfg: Dict) -> tuple[str, str]:
+    """Return (period_start_date, period_end_date) inclusive, based on rolling window ending today."""
+    months = int(cfg.get("emergency_quota_period_months", 6))
+    end = now_wib().date()
+    start_month = end.replace(day=1)
+    # Move back (months-1) months
+    y = start_month.year
+    m = start_month.month - (months - 1)
+    while m <= 0:
+        m += 12
+        y -= 1
+    start = start_month.replace(year=y, month=m)
+    return start.isoformat(), end.isoformat()
+
+
+@api.post("/emergency")
+async def create_emergency(payload: EmergencyIn, user: Dict = Depends(get_current_user)):
+    if not payload.proof_base64 or len(payload.proof_base64) < 50:
+        raise HTTPException(status_code=400, detail="Bukti (foto/dokumen) wajib diunggah")
+    cfg = await get_config()
+    start, end = _emergency_period_bounds(cfg)
+    approved_in_period = await db.emergency_requests.count_documents(
+        {
+            "user_id": user["id"],
+            "status": "approved",
+            "date": {"$gte": start, "$lte": end},
+        }
+    )
+    pending_in_period = await db.emergency_requests.count_documents(
+        {
+            "user_id": user["id"],
+            "status": "pending",
+            "date": {"$gte": start, "$lte": end},
+        }
+    )
+    limit = int(cfg.get("emergency_quota_limit", 2))
+    if approved_in_period + pending_in_period >= limit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kuota darurat penuh: {approved_in_period} disetujui + {pending_in_period} tertunda (batas {limit}/{cfg.get('emergency_quota_period_months',6)} bulan)",
+        )
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "division": user.get("division"),
+        "position": user.get("position"),
+        "date": payload.date,
+        "reason": payload.reason,
+        "proof_base64": payload.proof_base64,
+        "status": "pending",
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "review_note": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.emergency_requests.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/emergency/me")
+async def my_emergencies(user: Dict = Depends(get_current_user)):
+    cursor = db.emergency_requests.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1)
+    return [d async for d in cursor]
+
+
+@api.get("/emergency/quota")
+async def emergency_quota(user: Dict = Depends(get_current_user)):
+    cfg = await get_config()
+    start, end = _emergency_period_bounds(cfg)
+    approved = await db.emergency_requests.count_documents(
+        {"user_id": user["id"], "status": "approved", "date": {"$gte": start, "$lte": end}}
+    )
+    pending = await db.emergency_requests.count_documents(
+        {"user_id": user["id"], "status": "pending", "date": {"$gte": start, "$lte": end}}
+    )
+    limit = int(cfg.get("emergency_quota_limit", 2))
+    return {
+        "period_start": start,
+        "period_end": end,
+        "limit": limit,
+        "approved": approved,
+        "pending": pending,
+        "remaining": max(0, limit - approved - pending),
+    }
+
+
+@api.get("/emergency/pending")
+async def pending_emergencies(_: Dict = Depends(require_supervisor_or_admin)):
+    cursor = db.emergency_requests.find({"status": "pending"}, {"_id": 0}).sort("created_at", 1)
+    return [d async for d in cursor]
+
+
+@api.post("/emergency/{req_id}/review")
+async def review_emergency(
+    req_id: str, payload: EmergencyReviewIn, actor: Dict = Depends(require_supervisor_or_admin)
+):
+    doc = await db.emergency_requests.find_one({"id": req_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Permintaan tidak ditemukan")
+    if doc["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Permintaan sudah direview")
+    new_status = "approved" if payload.approve else "rejected"
+    await db.emergency_requests.update_one(
+        {"id": req_id},
+        {
+            "$set": {
+                "status": new_status,
+                "reviewed_by": actor["id"],
+                "reviewed_by_name": actor["name"],
+                "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                "review_note": payload.review_note,
+            }
+        },
+    )
+    if payload.approve:
+        month = doc["date"][:7]
+        await bump_user_stats(doc["user_id"], month, emergency_count=1)
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": doc["user_id"],
+            "division": doc.get("division"),
+            "message": f"Darurat {doc['date']} {new_status.upper()} oleh {actor['name']}",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return await db.emergency_requests.find_one({"id": req_id}, {"_id": 0})
+
+
+# ---------- Lateness history ----------
+@api.get("/lateness/me")
+async def my_lateness(user: Dict = Depends(get_current_user)):
+    cfg = await get_config()
+    month = month_wib_str()
+    cursor = db.attendance.find(
+        {"user_id": user["id"], "is_late": True, "date": {"$regex": f"^{month}"}}, {"_id": 0}
+    ).sort("date", -1)
+    monthly_records = [d async for d in cursor]
+    all_cursor = (
+        db.attendance.find({"user_id": user["id"], "is_late": True}, {"_id": 0})
+        .sort("date", -1)
+        .limit(60)
+    )
+    history = [d async for d in all_cursor]
+    quota = int(cfg.get("lateness_monthly_quota", 3))
+    used = len(monthly_records)
+    return {
+        "quota": quota,
+        "used_this_month": used,
+        "remaining_this_month": max(0, quota - used),
+        "history": history,
+    }
 
 
 # ---------- Notifications ----------
