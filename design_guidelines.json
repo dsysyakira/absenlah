@@ -1,0 +1,82 @@
+{
+  "project_name": "Absenlah",
+  "domain": "Enterprise Mobile SaaS (Attendance & HR)",
+  "theme": "LIGHT",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "rationale": "The app is a daily B2B utility for warehouse workers, couriers, and admins. It must feel fast, precise, and authoritative. Status colors (late, on-time, penalty) must pop against a high-contrast clean background. Archetype 4 emphasizes clarity and function over decoration, fitting for an enterprise operational tool.",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "IBM Plex Sans",
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium",
+      "body": "text-base leading-relaxed",
+      "small_labels": "text-xs tracking-[0.2em] uppercase font-semibold text-slate-500"
+    },
+    "note": "Use 'Outfit' for its geometric clarity and modern tech feel on headings. 'IBM Plex Sans' provides extreme legibility for numerical data like Rupiah (Rp) penalties, bonuses, and time formats (10:00 AM) which is crucial for workers."
+  },
+  "colors": {
+    "background": "#F8F9FA",
+    "surface": "#FFFFFF",
+    "primary": "#0F172A",
+    "primary_accent": "#0052FF",
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748B",
+    "status": {
+      "success": "#10B981",
+      "danger": "#EF4444",
+      "warning": "#F59E0B",
+      "info": "#3B82F6"
+    },
+    "border": "#E2E8F0"
+  },
+  "layout_and_spacing": {
+    "strategy": "Mobile-First Web App (Hybrid Fullstack)",
+    "mobile_container": "For the main app, use a max-w-md mx-auto container with h-screen, relative positioning, and overflow-hidden to simulate a mobile app experience on desktop browsers.",
+    "spacing_scale": "Use p-4 or p-6 for screen padding. Gap-4 for standard vertical flow.",
+    "navigation": "Bottom Tab Navigation (fixed bottom-0 w-full max-w-md bg-white border-t border-slate-200 z-50) for mobile users. Tabs: Beranda (Home), Absensi (Attendance), Cuti (Leave), Laporan (Reports), Profil (Profile).",
+    "admin_dashboard": "For Admin Control panels (Rule Engine, User Management), use a desktop-friendly layout (w-full) or a slide-out drawer/separate route not constrained to mobile width, emphasizing data density using the 'Control Room' grid.",
+    "surface_treatment": "Use 'Neumorphism' (Tactile) strategy for the main Check-In/Out button (large, drop-shadow, interactive). Use 'Grid Borders' for Admin config tables (Rule Engine) to look technical."
+  },
+  "components": {
+    "buttons": "Shadcn based. Main Check-In CTA should be massive and clear (Green for check-in, Red for check-out if active).",
+    "cards": "Flat background, 1px border (border-slate-200), rounded-xl, no massive shadows. Keep it clean (Swiss style).",
+    "inputs": "Shadcn inputs. Large touch targets for mobile (h-12).",
+    "drawers": "Use Shadcn Drawer (bottom sheet) for complex mobile interactions like Leave Requests and filtering.",
+    "data_display": "Use Shadcn Tables for Admin Rules Config and User Management. Use Recharts for daily/weekly/monthly attendance trends."
+  },
+  "core_workflows": {
+    "auth": "Login screen defaults to Indonesian. Handle default admin (administrator/admin123) and force password change on first login.",
+    "home_check_in": "Big live clock. GPS/Geofencing validation status (Valid/Invalid location). Display today's shift (10:00 AM - 08:00 PM) and quick stats (Lateness/Bonuses).",
+    "admin_control": "Manage warehouses (GPS data), users (roles/locations), and dynamic rule engine (penalty fees, bonuses, progressive overtime rates, early departure limits).",
+    "leave_request": "Form requires >= 2 hours before shift, cancellation up to H-1. Division-based visibility.",
+    "manual_attendance": "Emergency flow for couriers requiring supervisor approval."
+  },
+  "media_and_icons": {
+    "icon_library": "lucide-react",
+    "image_urls": [
+      {
+        "category": "auth_background",
+        "url": "https://images.unsplash.com/photo-1705909773229-411dab40e09b",
+        "description": "Modern office reception to give an enterprise vibe on the login screen."
+      },
+      {
+        "category": "user_avatar_1",
+        "url": "https://images.pexels.com/photos/4483865/pexels-photo-4483865.jpeg",
+        "description": "Warehouse worker dummy avatar for profile/roster."
+      },
+      {
+        "category": "user_avatar_2",
+        "url": "https://images.pexels.com/photos/36697931/pexels-photo-36697931.jpeg",
+        "description": "Logistics worker dummy avatar for profile/roster."
+      }
+    ]
+  },
+  "motion_and_accessibility": {
+    "motion": "Use active:scale-95 on touch targets. Micro-interactions on bottom tab selection.",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute in kebab-case (e.g., data-testid='login-btn').",
+    "language": "Default Indonesian UI text (e.g., Masuk, Beranda, Absen, Simpan). English toggleable via settings."
+  },
+  "file_type_instruction": "Ensure code is generated in .js (React JS + Tailwind + Shadcn) as per environment rules."
+}
