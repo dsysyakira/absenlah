@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "absenlah",
+    "name": "frontend",
     "slug": "absenlah",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.absenlah.app", 
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
