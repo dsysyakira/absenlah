@@ -81,12 +81,7 @@ export default function AttendanceScreen() {
       </View>
 
       {/* Chips row */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chipsRow}
-      >
+      <View style={styles.chipsRow}>
         {(
           [
             ["attendance", t("tab_attendance")],
@@ -98,6 +93,7 @@ export default function AttendanceScreen() {
           <TouchableOpacity
             key={key}
             onPress={() => setSection(key)}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={[styles.chip, section === key && styles.chipActive]}
             testID={`history-chip-${key}`}
           >
@@ -105,14 +101,14 @@ export default function AttendanceScreen() {
               style={{
                 color: section === key ? "#fff" : colors.primary,
                 fontWeight: "600",
-                fontSize: 13,
+                fontSize: 12,
               }}
             >
               {label}
             </Body>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -544,21 +540,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radii.md,
   },
-  chipsScroll: { flexGrow: 0 },
   chipsRow: {
+    flexDirection: "row",
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
   },
   chip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     height: 36,
     justifyContent: "center",
+    alignItems: "center",
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    flexShrink: 0,
+    flex: 1,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },

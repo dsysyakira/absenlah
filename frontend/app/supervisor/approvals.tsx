@@ -81,14 +81,10 @@ export default function ApprovalsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.chipsScroll}
-        contentContainerStyle={styles.chipsRow}
-      >
+      <View style={styles.chipsRow}>
         <TouchableOpacity
           onPress={() => setTab("early_departure")}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           style={[styles.chip, tab === "early_departure" && styles.chipActive]}
           testID="approvals-tab-ed"
         >
@@ -104,6 +100,7 @@ export default function ApprovalsScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setTab("emergency")}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           style={[styles.chip, tab === "emergency" && styles.chipActive]}
           testID="approvals-tab-em"
         >
@@ -117,7 +114,7 @@ export default function ApprovalsScreen() {
             {t("tab_emergency")} ({em.length})
           </Body>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -218,8 +215,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.sm,
   },
-  chipsScroll: { flexGrow: 0 },
   chipsRow: {
+    flexDirection: "row",
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
@@ -228,11 +225,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 36,
     justifyContent: "center",
+    alignItems: "center",
     borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    flexShrink: 0,
+    flex: 1,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
