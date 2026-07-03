@@ -110,7 +110,8 @@ async def require_supervisor_or_admin(user: Dict = Depends(get_current_user)) ->
 
 # ---------- Models ----------
 class LoginIn(BaseModel):
-    username: str
+    username: Optional[str] = None
+    email: Optional[str] = None
     password: str
     device_id: Optional[str] = None
 
@@ -120,8 +121,16 @@ class ChangePasswordIn(BaseModel):
     new_password: str
 
 
+class GoogleAuthIn(BaseModel):
+    google_id: str
+    email: str
+    name: str
+    device_id: Optional[str] = None
+
+
 class UserCreate(BaseModel):
     username: str
+    email: str
     name: str
     password: str
     role: Literal["admin", "supervisor", "user"] = "user"
@@ -198,6 +207,14 @@ class ManualAttendanceIn(BaseModel):
     user_id: str
     check_in_iso: str  # ISO datetime of arrival
     reason: str
+
+
+class ArrivalConfirmationIn(BaseModel):
+    confirmed_arrival_at: str  # ISO datetime
+
+
+class LatenessReviewIn(BaseModel):
+    penalty_type: Literal["lateness_quota", "leave_day", "emergency_quota"]
 
 
 class LeaveIn(BaseModel):
@@ -503,11 +520,52 @@ async def notify_division(division: Optional[str], message: str, exclude_user_id
 
 
 # ---------- Auth endpoints ----------
+@api.post("/auth/google-login")
+async def google_login(payload: GoogleAuthIn):
+    user = await db.users.find_one({"$or": [{"google_id": payload.google_id}, {"email": payload.email}]})
+    if not user:
+        # Auto-register Google user
+        user_id = str(uuid.uuid4())
+        user = {
+            "id": user_id,
+            "username": payload.email.split("@")[0],
+            "email": payload.email,
+            "name": payload.name,
+            "google_id": payload.google_id,
+            "role": "user",
+            "active": True,
+            "device_id": payload.device_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.users.insert_one(user)
+    else:
+        if not user.get("google_id"):
+            await db.users.update_one({"id": user["id"]}, {"$set": {"google_id": payload.google_id}})
+
+        # Device Binding check for Google Login
+        if payload.device_id:
+            if not user.get("device_id"):
+                await db.users.update_one({"id": user["id"]}, {"$set": {"device_id": payload.device_id}})
+            elif user["device_id"] != payload.device_id:
+                raise HTTPException(status_code=403, detail="Device mismatch")
+
+    token = create_token(user["id"], user["username"], user["role"])
+    return {"access_token": token, "token_type": "bearer", "user": user}
+
+
 @api.post("/auth/login")
 async def login(payload: LoginIn):
-    user = await db.users.find_one({"username": payload.username})
+    query = {}
+    if payload.username:
+        query["username"] = payload.username
+    elif payload.email:
+        query["email"] = payload.email
+    else:
+        raise HTTPException(status_code=400, detail="Username atau Email wajib diisi")
+
+    user = await db.users.find_one(query)
     if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=400, detail="Username atau password salah")
+        raise HTTPException(status_code=400, detail="Username/Email atau password salah")
     if not user.get("active", True):
         raise HTTPException(status_code=403, detail="Akun dinonaktifkan")
 
@@ -569,12 +627,13 @@ async def list_users(_: Dict = Depends(get_current_user)):
 
 @api.post("/users")
 async def create_user(payload: UserCreate, _: Dict = Depends(require_admin)):
-    exists = await db.users.find_one({"username": payload.username})
+    exists = await db.users.find_one({"$or": [{"username": payload.username}, {"email": payload.email}]})
     if exists:
-        raise HTTPException(status_code=400, detail="Username sudah dipakai")
+        raise HTTPException(status_code=400, detail="Username atau Email sudah dipakai")
     doc = {
         "id": str(uuid.uuid4()),
         "username": payload.username,
+        "email": payload.email,
         "name": payload.name,
         "password_hash": hash_password(payload.password),
         "role": payload.role,
@@ -620,6 +679,14 @@ async def reset_password(user_id: str, _: Dict = Depends(require_admin)):
     if not r.matched_count:
         raise HTTPException(status_code=404, detail="User tidak ditemukan")
     return {"ok": True, "temporary_password": new}
+
+
+@api.post("/users/{user_id}/release-device")
+async def release_device(user_id: str, _: Dict = Depends(require_admin)):
+    r = await db.users.update_one({"id": user_id}, {"$set": {"device_id": None}})
+    if not r.matched_count:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+    return {"ok": True}
 
 
 # ---------- Warehouses (admin) ----------
@@ -950,6 +1017,9 @@ async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(r
         "status": "checked_in",
         "manual": True,
         "manual_reason": payload.reason,
+        "arrival_limit_at": (check_in_dt + timedelta(hours=2)).isoformat(),
+        "arrival_confirmed_at": None,
+        "arrival_status": "pending",
         "approved_by": actor["id"],
         "approved_by_name": actor["name"],
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -964,6 +1034,82 @@ async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(r
     )
     doc.pop("_id", None)
     return doc
+
+
+@api.post("/attendance/{att_id}/review-lateness")
+async def review_lateness(att_id: str, payload: LatenessReviewIn, actor: Dict = Depends(require_supervisor_or_admin)):
+    att = await db.attendance.find_one({"id": att_id})
+    if not att or not att.get("is_late"):
+        raise HTTPException(status_code=404, detail="Late attendance record not found")
+
+    cfg = await get_config()
+    month = att["date"][:7]
+    stats_inc = {}
+
+    if payload.penalty_type == "lateness_quota":
+        # Already handled by default logic in check_in (increments penalty if past quota)
+        # But here we can explicitly track it if needed.
+        pass
+    elif payload.penalty_type == "leave_day":
+        # Deduct leave instead of money
+        await db.attendance.update_one({"id": att_id}, {"$set": {"penalty_amount": 0, "leave_deduction": 1}})
+        stats_inc = {"total_penalty": -att.get("penalty_amount", 0), "leave_count": 1}
+    elif payload.penalty_type == "emergency_quota":
+        # Use emergency quota instead of money/leave
+        # Verify emergency quota first?
+        quota = await emergency_quota(await db.users.find_one({"id": att["user_id"]}))
+        if quota["remaining"] <= 0:
+            raise HTTPException(status_code=400, detail="Jatah darurat sudah habis")
+
+        await db.attendance.update_one({"id": att_id}, {"$set": {"penalty_amount": 0, "emergency_used": True}})
+        stats_inc = {"total_penalty": -att.get("penalty_amount", 0), "emergency_count": 1}
+
+    if stats_inc:
+        await bump_user_stats(att["user_id"], month, **stats_inc)
+
+    return {"ok": True, "applied": payload.penalty_type}
+
+
+@api.post("/attendance/{att_id}/confirm-arrival")
+async def confirm_arrival(att_id: str, payload: ArrivalConfirmationIn, actor: Dict = Depends(require_supervisor_or_admin)):
+    att = await db.attendance.find_one({"id": att_id})
+    if not att or not att.get("manual"):
+        raise HTTPException(status_code=404, detail="Manual attendance record not found")
+
+    cfg = await get_config()
+    arrival_dt = datetime.fromisoformat(payload.confirmed_arrival_at).replace(tzinfo=WIB)
+    check_in_dt = datetime.fromisoformat(att["check_in_at"]).replace(tzinfo=WIB)
+
+    hours_diff = (arrival_dt - check_in_dt).total_seconds() / 3600
+    arrival_status = "on_time"
+    penalty = 0
+    leave_deduction = 0
+
+    if hours_diff > 2:
+        # Check if arrived after 14:00
+        cutoff_14 = arrival_dt.replace(hour=14, minute=0, second=0, microsecond=0)
+        if arrival_dt > cutoff_14:
+            arrival_status = "late_penalty"
+            penalty = cfg.get("on_time_bonus", 20000)
+            leave_deduction = 1
+        else:
+            arrival_status = "late_no_penalty"  # Within 14:00 but > 2h (requires supervisor discretion)
+
+    await db.attendance.update_one(
+        {"id": att_id},
+        {
+            "$set": {
+                "arrival_confirmed_at": arrival_dt.isoformat(),
+                "arrival_status": arrival_status,
+                "penalty_amount": att.get("penalty_amount", 0) + penalty,
+                "leave_deduction": att.get("leave_deduction", 0) + leave_deduction,
+            }
+        },
+    )
+    if penalty or leave_deduction:
+        await bump_user_stats(att["user_id"], att["date"][:7], total_penalty=penalty, leave_count=leave_deduction)
+
+    return {"status": arrival_status, "penalty": penalty, "leave_deduction": leave_deduction}
 
 
 @api.get("/attendance/me")
@@ -1074,18 +1220,30 @@ def formatTime(iso_str: Optional[str]) -> str:
 
 @api.get("/attendance/reports")
 async def reports(
-    period: Literal["daily", "weekly", "monthly"] = "monthly",
+    period: Optional[Literal["daily", "weekly", "monthly"]] = None,
+    is_late: Optional[bool] = None,
+    manual: Optional[bool] = None,
+    arrival_status: Optional[str] = None,
     user: Dict = Depends(get_current_user),
 ):
     now = now_wib()
-    if period == "daily":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif period == "weekly":
-        start = now - timedelta(days=7)
-    else:
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    query = {}
+    if period:
+        if period == "daily":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == "weekly":
+            start = now - timedelta(days=7)
+        else:
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        query["created_at"] = {"$gte": start.astimezone(timezone.utc).isoformat()}
 
-    query = {"created_at": {"$gte": start.astimezone(timezone.utc).isoformat()}}
+    if is_late is not None:
+        query["is_late"] = is_late
+    if manual is not None:
+        query["manual"] = manual
+    if arrival_status is not None:
+        query["arrival_status"] = arrival_status
+
     if user["role"] not in ("admin", "supervisor"):
         query["user_id"] = user["id"]
 

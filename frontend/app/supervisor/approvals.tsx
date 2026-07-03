@@ -17,7 +17,7 @@ import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
 import { colors, formatDate, formatTime, radii, spacing } from "@/src/ui/theme";
 import { showToast } from "@/src/ui/Toast";
 
-type Tab = "early_departure" | "emergency";
+type Tab = "early_departure" | "emergency" | "lateness" | "manual";
 
 export default function ApprovalsScreen() {
   const { t } = useI18n();
@@ -25,18 +25,24 @@ export default function ApprovalsScreen() {
   const [tab, setTab] = useState<Tab>("early_departure");
   const [ed, setEd] = useState<any[]>([]);
   const [em, setEm] = useState<any[]>([]);
+  const [late, setLate] = useState<any[]>([]);
+  const [manual, setManual] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [proofView, setProofView] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [a, b] = await Promise.all([
+      const [a, b, c, d] = await Promise.all([
         api.get<any[]>("/early-departure/pending"),
         api.get<any[]>("/emergency/pending"),
+        api.get<any>("/attendance/reports?is_late=true"),
+        api.get<any>("/attendance/reports?manual=true&arrival_status=pending"),
       ]);
       setEd(a);
       setEm(b);
+      setLate((c.records || []).filter((r: any) => !r.lateness_reviewed));
+      setManual(d.records || []);
     } catch (e: any) {
       showToast(e?.message || "Load failed", "error");
     }
@@ -68,7 +74,41 @@ export default function ApprovalsScreen() {
     }
   };
 
-  const list = tab === "early_departure" ? ed : em;
+  const reviewLate = async (id: string, penalty_type: string) => {
+    setBusyId(id);
+    try {
+      await api.post(`/attendance/${id}/review-lateness`, { penalty_type });
+      showToast("Lateness reviewed", "success");
+      await load();
+    } catch (e: any) {
+      showToast(e?.message || t("error"), "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const confirmArrival = async (id: string) => {
+    setBusyId(id);
+    try {
+      await api.post(`/attendance/${id}/confirm-arrival`, {
+        confirmed_arrival_at: new Date().toISOString(),
+      });
+      showToast("Arrival confirmed", "success");
+      await load();
+    } catch (e: any) {
+      showToast(e?.message || t("error"), "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const getList = () => {
+    if (tab === "early_departure") return ed;
+    if (tab === "emergency") return em;
+    if (tab === "lateness") return late;
+    return manual;
+  };
+  const list = getList();
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -81,40 +121,14 @@ export default function ApprovalsScreen() {
         <View style={{ width: 22 }} />
       </View>
 
-      <View style={styles.chipsRow}>
-        <TouchableOpacity
-          onPress={() => setTab("early_departure")}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-          style={[styles.chip, tab === "early_departure" && styles.chipActive]}
-          testID="approvals-tab-ed"
-        >
-          <Body
-            style={{
-              color: tab === "early_departure" ? "#fff" : colors.primary,
-              fontWeight: "600",
-              fontSize: 13,
-            }}
-          >
-            {t("tab_early_departure")} ({ed.length})
-          </Body>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setTab("emergency")}
-          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-          style={[styles.chip, tab === "emergency" && styles.chipActive]}
-          testID="approvals-tab-em"
-        >
-          <Body
-            style={{
-              color: tab === "emergency" ? "#fff" : colors.primary,
-              fontWeight: "600",
-              fontSize: 13,
-            }}
-          >
-            {t("tab_emergency")} ({em.length})
-          </Body>
-        </TouchableOpacity>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRowScroll}>
+        <View style={styles.chipsRow}>
+          <TabChip label={t("tab_early_departure")} count={ed.length} active={tab === "early_departure"} onPress={() => setTab("early_departure")} />
+          <TabChip label={t("tab_emergency")} count={em.length} active={tab === "emergency"} onPress={() => setTab("emergency")} />
+          <TabChip label={t("late")} count={late.length} active={tab === "lateness"} onPress={() => setTab("lateness")} />
+          <TabChip label="Manual" count={manual.length} active={tab === "manual"} onPress={() => setTab("manual")} />
+        </View>
+      </ScrollView>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -141,6 +155,16 @@ export default function ApprovalsScreen() {
                   {t("check_out")}: {formatTime(r.requested_check_out_at)}
                 </Muted>
               )}
+              {tab === "lateness" && (
+                <Muted>
+                  {t("late")}: {r.late_minutes} {t("minutes")}
+                </Muted>
+              )}
+              {tab === "manual" && (
+                <Muted>
+                  Limit Arrival: {formatTime(r.arrival_limit_at)}
+                </Muted>
+              )}
               {tab === "emergency" && (
                 <>
                   <Body style={{ fontSize: 13 }}>{r.reason}</Body>
@@ -156,25 +180,64 @@ export default function ApprovalsScreen() {
                   )}
                 </>
               )}
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-                <Button
-                  title={t("reject")}
-                  variant="outline"
-                  size="sm"
-                  onPress={() => decide(tab === "early_departure" ? "early-departure" : "emergency", r.id, false)}
-                  loading={busyId === r.id}
-                  style={{ flex: 1 }}
-                  testID={`reject-${r.id}`}
-                />
-                <Button
-                  title={t("approve")}
-                  variant="success"
-                  size="sm"
-                  onPress={() => decide(tab === "early_departure" ? "early-departure" : "emergency", r.id, true)}
-                  loading={busyId === r.id}
-                  style={{ flex: 1 }}
-                  testID={`approve-${r.id}`}
-                />
+              <View style={{ gap: 8, marginTop: 6 }}>
+                {tab === "lateness" ? (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Button
+                      title="Quota"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => reviewLate(r.id, "lateness_quota")}
+                      loading={busyId === r.id}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title="Libur"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => reviewLate(r.id, "leave_day")}
+                      loading={busyId === r.id}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title="Darurat"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => reviewLate(r.id, "emergency_quota")}
+                      loading={busyId === r.id}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                ) : tab === "manual" ? (
+                  <Button
+                    title="Konfirmasi Kedatangan"
+                    variant="success"
+                    size="sm"
+                    onPress={() => confirmArrival(r.id)}
+                    loading={busyId === r.id}
+                  />
+                ) : (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Button
+                      title={t("reject")}
+                      variant="outline"
+                      size="sm"
+                      onPress={() => decide(tab === "early_departure" ? "early-departure" : "emergency", r.id, false)}
+                      loading={busyId === r.id}
+                      style={{ flex: 1 }}
+                      testID={`reject-${r.id}`}
+                    />
+                    <Button
+                      title={t("approve")}
+                      variant="success"
+                      size="sm"
+                      onPress={() => decide(tab === "early_departure" ? "early-departure" : "emergency", r.id, true)}
+                      loading={busyId === r.id}
+                      style={{ flex: 1 }}
+                      testID={`approve-${r.id}`}
+                    />
+                  </View>
+                )}
               </View>
             </Card>
           ))
@@ -206,8 +269,27 @@ export default function ApprovalsScreen() {
   );
 }
 
+const TabChip = ({ label, count, active, onPress }: any) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[styles.chip, active && styles.chipActive]}
+  >
+    <Body
+      numberOfLines={1}
+      style={{
+        color: active ? "#fff" : colors.primary,
+        fontWeight: "600",
+        fontSize: 12,
+      }}
+    >
+      {label} ({count})
+    </Body>
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  chipsRowScroll: { flexGrow: 0, maxHeight: 52 },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { WebView } from "react-native-webview";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
@@ -171,6 +172,36 @@ export default function HomeScreen() {
             </Body>
           </View>
         </View>
+
+        {/* Map View */}
+        {coords && (
+          <Card style={{ height: 200, padding: 0, overflow: "hidden" }}>
+            <WebView
+              originWhitelist={["*"]}
+              source={{
+                html: `
+                <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <style>body { margin: 0; } #map { height: 100vh; }</style>
+                  </head>
+                  <body>
+                    <div id="map"></div>
+                    <script>
+                      var map = L.map('map').setView([${coords.latitude}, ${coords.longitude}], 15);
+                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                      L.marker([${coords.latitude}, ${coords.longitude}]).addTo(map);
+                    </script>
+                  </body>
+                </html>
+              `,
+              }}
+              style={{ flex: 1 }}
+            />
+          </Card>
+        )}
 
         {/* Clock */}
         <Card style={styles.clockCard}>
