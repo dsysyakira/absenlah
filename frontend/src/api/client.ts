@@ -3,6 +3,16 @@ import { storage } from "@/src/utils/storage";
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 const TOKEN_KEY = "auth_token";
+const DEVICE_ID_KEY = "device_id";
+
+export async function getDeviceId(): Promise<string> {
+  let id = await storage.getItem<string>(DEVICE_ID_KEY, "");
+  if (!id) {
+    id = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    await storage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
 
 export async function saveToken(token: string) {
   await storage.secureSet(TOKEN_KEY, token);
@@ -25,6 +35,15 @@ async function request<T = any>(
     const tok = await getToken();
     if (tok) headers.Authorization = `Bearer ${tok}`;
   }
+
+  // Auto-inject device_id into login and check-in
+  if ((path === "/auth/login" || path === "/attendance/check-in") && method === "POST") {
+    const devId = await getDeviceId();
+    if (typeof body === "object") {
+      body = { ...body, device_id: devId };
+    }
+  }
+
   const res = await fetch(`${BASE}/api${path}`, {
     method,
     headers,

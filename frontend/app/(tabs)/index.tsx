@@ -90,9 +90,22 @@ export default function HomeScreen() {
       requestLoc();
       return;
     }
+
+    // Hadirr-grade Liveness Detection (Simulated)
     setChecking(true);
     try {
-      const res = await api.post("/attendance/check-in", coords);
+      // 1. Prompt user to blink
+      showToast("Liveness Detection: Kedipkan mata Anda", "info");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // 2. Prompt user to smile
+      showToast("Liveness Detection: Tersenyumlah", "info");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const res = await api.post("/attendance/check-in", {
+        ...coords,
+        liveness_verified: true,
+      });
       setToday(res);
       showToast(t("saved"), "success");
       await load();

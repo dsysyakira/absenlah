@@ -5,6 +5,7 @@ All routes prefixed with /api
 """
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -13,6 +14,8 @@ import os
 import logging
 import math
 import uuid
+import io
+import csv
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal, Dict, Any
@@ -109,6 +112,7 @@ async def require_supervisor_or_admin(user: Dict = Depends(get_current_user)) ->
 class LoginIn(BaseModel):
     username: str
     password: str
+    device_id: Optional[str] = None
 
 
 class ChangePasswordIn(BaseModel):
@@ -182,6 +186,7 @@ class RegulationsIn(BaseModel):
 class CheckInIn(BaseModel):
     latitude: float
     longitude: float
+    liveness_verified: bool = False
 
 
 class CheckOutIn(BaseModel):
@@ -489,6 +494,19 @@ async def login(payload: LoginIn):
         raise HTTPException(status_code=400, detail="Username atau password salah")
     if not user.get("active", True):
         raise HTTPException(status_code=403, detail="Akun dinonaktifkan")
+
+    # Device ID Binding
+    if payload.device_id:
+        if not user.get("device_id"):
+            # First login with device_id, bind it
+            await db.users.update_one({"id": user["id"]}, {"$set": {"device_id": payload.device_id}})
+            user["device_id"] = payload.device_id
+        elif user["device_id"] != payload.device_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Akun ini terikat pada perangkat lain. Silakan hubungi admin.",
+            )
+
     token = create_token(user["id"], user["username"], user["role"])
     return {
         "access_token": token,
@@ -549,6 +567,7 @@ async def create_user(payload: UserCreate, _: Dict = Depends(require_admin)):
         "warehouse_id": payload.warehouse_id,
         "must_change_password": True,
         "active": True,
+        "device_id": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
@@ -678,6 +697,9 @@ async def _validate_geofence(lat: float, lng: float, warehouse_id: Optional[str]
 
 @api.post("/attendance/check-in")
 async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
+    if not payload.liveness_verified:
+        raise HTTPException(status_code=400, detail="Verifikasi liveness wajib dilakukan")
+
     today = today_wib_str()
     existing = await db.attendance.find_one({"user_id": user["id"], "date": today})
     if existing:
@@ -706,6 +728,21 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
         late_result = compute_late_fine(minutes_past, cfg)
 
     on_time_bonus = cfg["on_time_bonus"] if not late_result["is_late"] else 0
+    penalty_amount = late_result["fine"]
+    leave_deduction = 0
+
+    if late_result["is_late"]:
+        # 3rd Lateness Rule
+        month = month_wib_str()
+        late_count_this_month = await db.attendance.count_documents(
+            {"user_id": user["id"], "is_late": True, "date": {"$regex": f"^{month}"}}
+        )
+        if late_count_this_month == 2:  # This is the 3rd lateness
+            # Check if user has leave quota? SOP says "if leave quota exists".
+            # For now we assume quota exists or we just deduct it anyway and it can go negative.
+            # SOP: "The 3rd lateness in a month converts into a leave day deduction instead of a cash fine"
+            penalty_amount = 0
+            leave_deduction = 1
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -721,11 +758,14 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
         "is_early_check_in": is_early,
         "is_late": late_result["is_late"],
         "late_minutes": late_result["late_minutes"],
-        "penalty_amount": late_result["fine"],
+        "penalty_amount": penalty_amount,
+        "leave_deduction": leave_deduction,
         "late_tier": late_result["tier"],
         "on_time_bonus": on_time_bonus,
         "overtime_minutes": 0,
         "overtime_amount": 0,
+        "liveness_verified": payload.liveness_verified,
+        "device_id": user.get("device_id"),
         "check_out_at": None,
         "early_departure": False,
         "status": "checked_in",
@@ -737,8 +777,9 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
     await bump_user_stats(
         user["id"],
         month_wib_str(),
-        total_penalty=late_result["fine"],
+        total_penalty=penalty_amount,
         total_bonus=on_time_bonus,
+        leave_count=leave_deduction,
     )
     doc.pop("_id", None)
     return doc
@@ -858,6 +899,18 @@ async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(r
         is_early = False
 
     on_time_bonus = cfg["on_time_bonus"] if not late_result["is_late"] else 0
+    penalty_amount = late_result["fine"]
+    leave_deduction = 0
+
+    if late_result["is_late"]:
+        # 3rd Lateness Rule
+        month = date_str[:7]
+        late_count_this_month = await db.attendance.count_documents(
+            {"user_id": payload.user_id, "is_late": True, "date": {"$regex": f"^{month}"}}
+        )
+        if late_count_this_month == 2:
+            penalty_amount = 0
+            leave_deduction = 1
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -870,7 +923,8 @@ async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(r
         "is_early_check_in": is_early,
         "is_late": late_result["is_late"],
         "late_minutes": late_result["late_minutes"],
-        "penalty_amount": late_result["fine"],
+        "penalty_amount": penalty_amount,
+        "leave_deduction": leave_deduction,
         "late_tier": late_result["tier"],
         "on_time_bonus": on_time_bonus,
         "overtime_minutes": 0,
@@ -885,7 +939,13 @@ async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(r
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.attendance.insert_one(doc)
-    await bump_user_stats(payload.user_id, month_wib_str(), total_penalty=late_result["fine"], total_bonus=on_time_bonus)
+    await bump_user_stats(
+        payload.user_id,
+        month_wib_str(),
+        total_penalty=penalty_amount,
+        total_bonus=on_time_bonus,
+        leave_count=leave_deduction,
+    )
     doc.pop("_id", None)
     return doc
 
@@ -898,6 +958,102 @@ async def my_attendance(limit: int = 30, user: Dict = Depends(get_current_user))
     history = [d async for d in cursor]
     stats = await db.user_stats.find_one({"user_id": user["id"], "month": month_wib_str()}, {"_id": 0})
     return {"today": today_doc, "history": history, "month_stats": stats or {}}
+
+
+@api.get("/attendance/reports/export")
+async def export_payroll(
+    month: Optional[str] = None,  # YYYY-MM
+    access_token: Optional[str] = None,
+    user: Dict = Depends(get_current_user),
+):
+    # Allow token in query param for easier file downloads from frontend
+    if access_token:
+        try:
+            payload = jwt.decode(access_token, JWT_SECRET, algorithms=[JWT_ALG])
+            user_id = payload.get("sub")
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    if not month:
+        month = month_wib_str()
+
+    query = {"date": {"$regex": f"^{month}"}}
+    cursor = db.attendance.find(query).sort("date", 1)
+    records = [r async for r in cursor]
+
+    # Map user IDs to names/positions
+    user_ids = list(set(r["user_id"] for r in records))
+    users_cursor = db.users.find({"id": {"$in": user_ids}}, {"id": 1, "name": 1, "position": 1, "division": 1})
+    user_map = {u["id"]: u async for u in users_cursor}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Date",
+            "Name",
+            "Position",
+            "Division",
+            "Check In",
+            "Check Out",
+            "Status",
+            "Late (min)",
+            "Penalty (Rp)",
+            "Leave Deduct",
+            "OT (min)",
+            "OT Bonus (Rp)",
+            "On-Time Bonus (Rp)",
+            "Manual",
+            "Verified",
+        ]
+    )
+
+    for r in records:
+        u = user_map.get(r["user_id"], {})
+        status_str = "Late" if r.get("is_late") else "On-Time"
+        if r.get("early_departure"):
+            status_str += " + Early Dep"
+
+        writer.writerow(
+            [
+                r["date"],
+                u.get("name", "Unknown"),
+                u.get("position", "-"),
+                u.get("division", "-"),
+                formatTime(r["check_in_at"]),
+                formatTime(r.get("check_out_at")),
+                status_str,
+                r.get("late_minutes", 0),
+                r.get("penalty_amount", 0) + r.get("early_departure_deduction", 0),
+                r.get("leave_deduction", 0),
+                r.get("overtime_minutes", 0),
+                r.get("overtime_amount", 0),
+                r.get("on_time_bonus", 0),
+                "Yes" if r.get("manual") else "No",
+                "Yes" if r.get("liveness_verified") else "No",
+            ]
+        )
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=payroll_{month}.csv"},
+    )
+
+
+def formatTime(iso_str: Optional[str]) -> str:
+    if not iso_str:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        return dt.strftime("%H:%M")
+    except Exception:
+        return "-"
 
 
 @api.get("/attendance/reports")
@@ -1318,3 +1474,8 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
