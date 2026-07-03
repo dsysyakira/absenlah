@@ -221,6 +221,10 @@ class EmergencyReviewIn(BaseModel):
     review_note: Optional[str] = None
 
 
+class ActivityLogIn(BaseModel):
+    content: str
+
+
 # ---------- Seed ----------
 DEFAULT_CONFIG = {
     "id": "global",
@@ -323,6 +327,18 @@ async def startup_seed():
                 "latitude": -6.2088,
                 "longitude": 106.8456,
                 "radius_m": 200,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    # Seed announcements
+    ann = await db.announcements.find_one()
+    if not ann:
+        await db.announcements.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Selamat Datang di Absenlah v3.0",
+                "content": "Gunakan aplikasi ini untuk absensi harian dan pengajuan cuti.",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
         )
@@ -1445,6 +1461,47 @@ async def my_lateness(user: Dict = Depends(get_current_user)):
 async def get_notifications(user: Dict = Depends(get_current_user)):
     cursor = db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).limit(50)
     return [n async for n in cursor]
+
+
+@api.post("/activity-logs")
+async def create_activity_log(payload: ActivityLogIn, user: Dict = Depends(get_current_user)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_name": user["name"],
+        "date": today_wib_str(),
+        "content": payload.content,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.activity_logs.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/activity-logs/me")
+async def my_activity_logs(user: Dict = Depends(get_current_user)):
+    cursor = db.activity_logs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1)
+    return [d async for d in cursor]
+
+
+@api.get("/announcements")
+async def get_announcements(_: Dict = Depends(get_current_user)):
+    cursor = db.announcements.find({}, {"_id": 0}).sort("created_at", -1)
+    return [d async for d in cursor]
+
+
+@api.get("/documents/me")
+async def my_documents(user: Dict = Depends(get_current_user)):
+    # Simulation of payslips
+    return [
+        {
+            "id": "payslip-01",
+            "title": f"Slip Gaji {month_wib_str()}",
+            "type": "payslip",
+            "url": "https://example.com/payslip.pdf",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ]
 
 
 @api.post("/notifications/{nid}/read")

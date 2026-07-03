@@ -80,6 +80,12 @@ export default function ProfileScreen() {
             onPress={() => router.push("/regulations")}
             testID="menu-regulations"
           />
+          <MenuItem
+            icon="briefcase-outline"
+            label="Vault"
+            onPress={() => router.push("/vault")}
+            testID="menu-vault"
+          />
         </Card>
 
         {isAdmin && (
