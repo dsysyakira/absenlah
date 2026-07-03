@@ -8,8 +8,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "@/src/i18n";
-import { api } from "@/src/api/client";
-import { Body, Card, H2, H3, Muted } from "@/src/ui/kit";
+import { api, getToken } from "@/src/api/client";
+import { useAuth } from "@/src/auth/AuthContext";
+import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
 import { colors, formatDate, formatRupiah, radii, spacing } from "@/src/ui/theme";
 import { showToast } from "@/src/ui/Toast";
 
@@ -17,6 +18,7 @@ type Period = "daily" | "weekly" | "monthly";
 
 export default function ReportsScreen() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("monthly");
   const [data, setData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,6 +40,21 @@ export default function ReportsScreen() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  };
+
+  const doExport = async () => {
+    try {
+      const tok = await getToken();
+      const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+      const url = `${baseUrl}/api/attendance/reports/export?access_token=${tok}`;
+      // In a real app, we'd use expo-file-system and expo-sharing
+      // For this hybrid web app simulation, we can use Linking or window.open
+      const { Linking } = await import("react-native");
+      Linking.openURL(url);
+      showToast("Exporting CSV...", "info");
+    } catch (e: any) {
+      showToast(e?.message || t("error"), "error");
+    }
   };
 
   return (
@@ -72,9 +89,20 @@ export default function ReportsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Card style={{ gap: spacing.md }}>
-          <H3>
-            {t("period")}: {t(period)}
-          </H3>
+          <View style={styles.row}>
+            <H3>
+              {t("period")}: {t(period)}
+            </H3>
+            {user?.role === "admin" && (
+              <Button
+                title="CSV"
+                variant="outline"
+                size="sm"
+                onPress={doExport}
+                testID="export-csv-button"
+              />
+            )}
+          </View>
           <View style={styles.statsGrid}>
             <Stat
               label={t("on_time_days")}
