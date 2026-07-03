@@ -308,16 +308,24 @@ export default function RulesAdmin() {
             </RowGrid>
           </Card>
 
-          {/* Quotas */}
+          {/* Quotas & Performance Bonuses */}
           <Card style={{ gap: spacing.md }}>
-            <H3>{t("lateness_quota")} & {t("emergency_quota")}</H3>
-            <Input
-              label={t("lateness_monthly_quota")}
-              value={String(cfg.lateness_monthly_quota ?? 3)}
-              onChangeText={(v) => update("lateness_monthly_quota", v)}
-              keyboardType="numeric"
-              testID="rule-lateness-quota"
-            />
+            <H3>Quotas & Performance Bonuses</H3>
+            <RowGrid>
+              <Input
+                label={t("lateness_monthly_quota")}
+                value={String(cfg.lateness_monthly_quota ?? 3)}
+                onChangeText={(v) => update("lateness_monthly_quota", v)}
+                keyboardType="numeric"
+                testID="rule-lateness-quota"
+              />
+              <Input
+                label="Monthly Leave Quota"
+                value={String(cfg.monthly_leave_quota_standard ?? 4)}
+                onChangeText={(v) => update("monthly_leave_quota_standard", v)}
+                keyboardType="numeric"
+              />
+            </RowGrid>
             <RowGrid>
               <Input
                 label={t("emergency_quota_period_months")}
@@ -334,6 +342,26 @@ export default function RulesAdmin() {
                 testID="rule-emergency-limit"
               />
             </RowGrid>
+            <RowGrid>
+              <Input
+                label="Leave Remaining Bonus (per day)"
+                value={String(cfg.leave_day_bonus_amount ?? 100000)}
+                onChangeText={(v) => update("leave_day_bonus_amount", v)}
+                keyboardType="numeric"
+              />
+              <Input
+                label="Monthly Discipline Bonus"
+                value={String(cfg.monthly_discipline_bonus_amount ?? 800000)}
+                onChangeText={(v) => update("monthly_discipline_bonus_amount", v)}
+                keyboardType="numeric"
+              />
+            </RowGrid>
+            <Input
+                label="Leave Limit for Disc. Bonus"
+                value={String(cfg.monthly_leave_limit_for_bonus ?? 4)}
+                onChangeText={(v) => update("monthly_leave_limit_for_bonus", v)}
+                keyboardType="numeric"
+            />
           </Card>
 
           <Button

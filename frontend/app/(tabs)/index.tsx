@@ -32,6 +32,7 @@ export default function HomeScreen() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [today, setToday] = useState<TodayRec | null>(null);
   const [monthStats, setMonthStats] = useState<any>({});
+  const [perfBonuses, setPerfBonuses] = useState<any>(null);
   const [announcement, setAnnouncement] = useState<any>(null);
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,12 +69,14 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [res, anns] = await Promise.all([
+      const [res, anns, reports] = await Promise.all([
         api.get<{ today: TodayRec; month_stats: any }>("/attendance/me"),
         api.get<any[]>("/announcements"),
+        api.get<any>("/attendance/reports?period=monthly"),
       ]);
       setToday(res.today);
       setMonthStats(res.month_stats || {});
+      setPerfBonuses(reports.performance_bonuses);
       if (anns.length > 0 && anns[0].is_popup) {
         setAnnouncement(anns[0]);
       }
@@ -398,6 +401,22 @@ export default function HomeScreen() {
               testID="stat-early-departure"
             />
           </View>
+
+          {perfBonuses && perfBonuses.total > 0 && (
+            <View style={{ marginTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md }}>
+              <H3 style={{ color: colors.success }}>Performance Bonuses</H3>
+              <View style={{ gap: 4, marginTop: 4 }}>
+                <View style={styles.row}>
+                  <Muted>Leave Remaining</Muted>
+                  <Body style={{ color: colors.success, fontWeight: "700" }}>+{formatRupiah(perfBonuses.remaining_leave_bonus)}</Body>
+                </View>
+                <View style={styles.row}>
+                  <Muted>Discipline Bonus</Muted>
+                  <Body style={{ color: colors.success, fontWeight: "700" }}>+{formatRupiah(perfBonuses.monthly_discipline_bonus)}</Body>
+                </View>
+              </View>
+            </View>
+          )}
         </Card>
       </ScrollView>
     </SafeAreaView>

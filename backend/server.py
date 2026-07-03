@@ -203,6 +203,10 @@ class ConfigIn(BaseModel):
     lateness_monthly_quota: int = 3  # allowance before penalty deduction ramps
     emergency_quota_period_months: int = 6
     emergency_quota_limit: int = 2
+    leave_day_bonus_amount: int = 100000
+    monthly_discipline_bonus_amount: int = 800000
+    monthly_leave_limit_for_bonus: int = 4
+    monthly_leave_quota_standard: int = 4
 
 
 class WarehouseUpdate(BaseModel):
@@ -307,6 +311,10 @@ DEFAULT_CONFIG = {
     "lateness_monthly_quota": 3,
     "emergency_quota_period_months": 6,
     "emergency_quota_limit": 2,
+    "leave_day_bonus_amount": 100000,
+    "monthly_discipline_bonus_amount": 800000,
+    "monthly_leave_limit_for_bonus": 4,
+    "monthly_leave_quota_standard": 4,
     "updated_at": datetime.now(timezone.utc).isoformat(),
 }
 
@@ -1339,6 +1347,33 @@ async def reports(
     total_ot = sum(r.get("overtime_amount", 0) for r in records)
     late_count = sum(1 for r in records if r.get("is_late"))
     on_time_count = sum(1 for r in records if not r.get("is_late"))
+
+    # Performance Bonuses (Monthly only)
+    perf_bonuses = {"remaining_leave_bonus": 0, "monthly_discipline_bonus": 0, "total": 0}
+    if period == "monthly":
+        cfg = await get_config()
+        # Assume 1 user in query if not admin/supervisor, or if user_id in query
+        user_id_filt = query.get("user_id")
+        if user_id_filt:
+            stats = await db.user_stats.find_one({"user_id": user_id_filt, "month": month_wib_str()})
+            if stats:
+                leave_used = stats.get("leave_count", 0)
+                # 1. Remaining Leave Bonus
+                quota = cfg.get("monthly_leave_quota_standard", 4)
+                remaining = max(0, quota - leave_used)
+                perf_bonuses["remaining_leave_bonus"] = remaining * cfg.get("leave_day_bonus_amount", 100000)
+
+                # 2. Monthly Discipline Bonus
+                # Condition: leave <= 4, late count within some limit (e.g. within quota), and no other violations
+                is_disciplined = (
+                    leave_used <= cfg.get("monthly_leave_limit_for_bonus", 4) and
+                    late_count <= cfg.get("lateness_monthly_quota", 3)
+                )
+                if is_disciplined:
+                    perf_bonuses["monthly_discipline_bonus"] = cfg.get("monthly_discipline_bonus_amount", 800000)
+
+                perf_bonuses["total"] = perf_bonuses["remaining_leave_bonus"] + perf_bonuses["monthly_discipline_bonus"]
+
     return {
         "period": period,
         "count": len(records),
@@ -1347,6 +1382,7 @@ async def reports(
         "total_penalty": total_penalty,
         "total_bonus": total_bonus,
         "total_overtime": total_ot,
+        "performance_bonuses": perf_bonuses,
         "records": records,
     }
 
