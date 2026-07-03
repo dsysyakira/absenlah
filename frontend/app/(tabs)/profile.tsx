@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -10,7 +10,7 @@ import { colors, radii, spacing } from "@/src/ui/theme";
 
 export default function ProfileScreen() {
   const { t, lang } = useI18n();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshMe } = useAuth();
   const router = useRouter();
 
   const isAdmin = user?.role === "admin";
@@ -21,15 +21,38 @@ export default function ProfileScreen() {
     router.replace("/login");
   };
 
+  const changePhoto = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      base64: true,
+      quality: 0.5,
+    });
+    if (!res.canceled && res.assets[0].base64) {
+      try {
+        await api.post("/auth/profile", { profile_photo_base64: res.assets[0].base64 });
+        showToast(t("saved"), "success");
+        if (refreshMe) refreshMe();
+      } catch (e: any) {
+        showToast(e.message, "error");
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Body style={{ color: "#fff", fontWeight: "800", fontSize: 24 }}>
-              {(user?.name || "?")[0].toUpperCase()}
-            </Body>
-          </View>
+          <TouchableOpacity onPress={changePhoto} style={styles.avatar}>
+            {user?.profile_photo ? (
+              <Image source={{ uri: `data:image/jpeg;base64,${user.profile_photo}` }} style={styles.avatarImg} />
+            ) : (
+              <Body style={{ color: "#fff", fontWeight: "800", fontSize: 24 }}>
+                {(user?.name || "?")[0].toUpperCase()}
+              </Body>
+            )}
+            <View style={styles.editIcon}>
+              <Ionicons name="camera" size={14} color="#fff" />
+            </View>
+          </TouchableOpacity>
           <H2>{user?.name}</H2>
           <Muted>
             {user?.position} • {user?.division}
@@ -86,6 +109,12 @@ export default function ProfileScreen() {
             onPress={() => router.push("/vault")}
             testID="menu-vault"
           />
+          <MenuItem
+            icon="car-outline"
+            label="Job Tracking"
+            onPress={() => router.push("/jobs/track")}
+            testID="menu-jobs"
+          />
         </Card>
 
         {isAdmin && (
@@ -114,6 +143,18 @@ export default function ProfileScreen() {
               label={t("regulations") + " (edit)"}
               onPress={() => router.push("/admin/regulations")}
               testID="menu-edit-regulations"
+            />
+            <MenuItem
+              icon="map-outline"
+              label="Monitoring Kurir"
+              onPress={() => router.push("/admin/monitoring")}
+              testID="menu-monitoring"
+            />
+            <MenuItem
+              icon="megaphone-outline"
+              label="Manage Announcements"
+              onPress={() => router.push("/admin/announcements")}
+              testID="menu-announcements"
             />
           </Card>
         )}
@@ -162,6 +203,20 @@ const MenuItem: React.FC<{
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  avatarImg: { width: "100%", height: "100%", borderRadius: 36 },
+  editIcon: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.accent,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   header: { alignItems: "center", gap: 4, marginBottom: spacing.md },
   avatar: {

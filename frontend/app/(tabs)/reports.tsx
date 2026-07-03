@@ -42,16 +42,16 @@ export default function ReportsScreen() {
     setRefreshing(false);
   };
 
-  const doExport = async () => {
+  const doExport = async (format: "csv" | "excel") => {
     try {
       const tok = await getToken();
       const baseUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-      const url = `${baseUrl}/api/attendance/reports/export?access_token=${tok}`;
-      // In a real app, we'd use expo-file-system and expo-sharing
-      // For this hybrid web app simulation, we can use Linking or window.open
+      const path = format === "csv" ? "export" : "export-excel";
+      const url = `${baseUrl}/api/attendance/reports/${path}?access_token=${tok}`;
+
       const { Linking } = await import("react-native");
       Linking.openURL(url);
-      showToast("Exporting CSV...", "info");
+      showToast(`Exporting ${format.toUpperCase()}...`, "info");
     } catch (e: any) {
       showToast(e?.message || t("error"), "error");
     }
@@ -94,13 +94,22 @@ export default function ReportsScreen() {
               {t("period")}: {t(period)}
             </H3>
             {user?.role === "admin" && (
-              <Button
-                title="CSV"
-                variant="outline"
-                size="sm"
-                onPress={doExport}
-                testID="export-csv-button"
-              />
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <Button
+                    title="CSV"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => doExport("csv")}
+                    testID="export-csv-button"
+                />
+                <Button
+                    title="Excel"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => doExport("excel")}
+                    testID="export-excel-button"
+                />
+              </View>
             )}
           </View>
           <View style={styles.statsGrid}>

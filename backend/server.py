@@ -128,6 +128,31 @@ class GoogleAuthIn(BaseModel):
     device_id: Optional[str] = None
 
 
+class UserProfileUpdateIn(BaseModel):
+    name: Optional[str] = None
+    profile_photo_base64: Optional[str] = None
+
+
+class JobCreateIn(BaseModel):
+    user_id: str
+    title: str
+    description: Optional[str] = ""
+
+
+class JobUpdateIn(BaseModel):
+    status: Literal["started", "completed"]
+    proof_base64: str
+    latitude: float
+    longitude: float
+
+
+class AnnouncementCreateIn(BaseModel):
+    title: str
+    content: str
+    is_popup: bool = True
+    send_push: bool = True
+
+
 class UserCreate(BaseModel):
     username: str
     email: str
@@ -598,6 +623,19 @@ async def login(payload: LoginIn):
             "must_change_password": user.get("must_change_password", False),
         },
     }
+
+
+@api.post("/auth/profile")
+async def update_profile(payload: UserProfileUpdateIn, user: Dict = Depends(get_current_user)):
+    updates = {}
+    if payload.name:
+        updates["name"] = payload.name
+    if payload.profile_photo_base64:
+        updates["profile_photo"] = payload.profile_photo_base64
+    if not updates:
+        return user
+    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+    return await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
 
 
 @api.post("/auth/change-password")
@@ -1124,6 +1162,51 @@ async def my_attendance(limit: int = 30, user: Dict = Depends(get_current_user))
     return {"today": today_doc, "history": history, "month_stats": stats or {}}
 
 
+@api.get("/attendance/reports/export-excel")
+async def export_payroll_excel(
+    month: Optional[str] = None,
+    user: Dict = Depends(require_supervisor_or_admin),
+):
+    import pandas as pd
+    if not month:
+        month = month_wib_str()
+
+    query = {"date": {"$regex": f"^{month}"}}
+    cursor = db.attendance.find(query).sort("date", 1)
+    records = [r async for r in cursor]
+
+    user_ids = list(set(r["user_id"] for r in records))
+    users_cursor = db.users.find({"id": {"$in": user_ids}}, {"id": 1, "name": 1, "position": 1})
+    user_map = {u["id"]: u async for u in users_cursor}
+
+    df_data = []
+    for r in records:
+        u = user_map.get(r["user_id"], {})
+        df_data.append({
+            "Date": r["date"],
+            "Name": u.get("name"),
+            "Position": u.get("position"),
+            "Check In": formatTime(r["check_in_at"]),
+            "Check Out": formatTime(r.get("check_out_at")),
+            "Late (min)": r.get("late_minutes", 0),
+            "Penalty (Rp)": r.get("penalty_amount", 0),
+            "OT (min)": r.get("overtime_minutes", 0),
+            "Bonus (Rp)": r.get("on_time_bonus", 0),
+        })
+
+    df = pd.DataFrame(df_data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Payroll")
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=payroll_{month}.xlsx"},
+    )
+
+
 @api.get("/attendance/reports/export")
 async def export_payroll(
     month: Optional[str] = None,  # YYYY-MM
@@ -1646,8 +1729,100 @@ async def my_activity_logs(user: Dict = Depends(get_current_user)):
 
 @api.get("/announcements")
 async def get_announcements(_: Dict = Depends(get_current_user)):
-    cursor = db.announcements.find({}, {"_id": 0}).sort("created_at", -1)
+    cursor = db.announcements.find({}, {"_id": 0}).sort("created_at", -1).limit(10)
     return [d async for d in cursor]
+
+
+@api.post("/announcements")
+async def create_announcement(payload: AnnouncementCreateIn, _: Dict = Depends(require_supervisor_or_admin)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "title": payload.title,
+        "content": payload.content,
+        "is_popup": payload.is_popup,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.announcements.insert_one(doc)
+    if payload.send_push:
+        # Simulate push notification to everyone
+        await db.notifications.insert_many([
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": u["id"],
+                "message": f"PENGUMUMAN: {payload.title}",
+                "read": False,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            } async for u in db.users.find({"active": True}, {"id": 1})
+        ])
+    return doc
+
+
+@api.get("/jobs/me")
+async def my_jobs(user: Dict = Depends(get_current_user)):
+    cursor = db.jobs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1)
+    return [d async for d in cursor]
+
+
+@api.post("/jobs")
+async def create_job(payload: JobCreateIn, _: Dict = Depends(require_supervisor_or_admin)):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": payload.user_id,
+        "title": payload.title,
+        "description": payload.description,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.jobs.insert_one(doc)
+    await db.users.update_one({"id": payload.user_id}, {"$set": {"is_available": False}})
+    return doc
+
+
+@api.put("/jobs/{job_id}")
+async def update_job(job_id: str, payload: JobUpdateIn, user: Dict = Depends(get_current_user)):
+    job = await db.jobs.find_one({"id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    updates = {"status": payload.status}
+    if payload.status == "started":
+        updates["started_at"] = datetime.now(timezone.utc).isoformat()
+        updates["proof_start"] = payload.proof_base64
+    elif payload.status == "completed":
+        updates["completed_at"] = datetime.now(timezone.utc).isoformat()
+        updates["proof_end"] = payload.proof_base64
+
+        # Auto-set available if back at warehouse (simulation)
+        # In real app we'd check distance to warehouse
+        await db.users.update_one({"id": job["user_id"]}, {"$set": {"is_available": True}})
+
+    await db.jobs.update_one({"id": job_id}, {"$set": updates})
+    return {"ok": True}
+
+
+@api.get("/monitoring/couriers")
+async def monitoring_couriers(_: Dict = Depends(require_supervisor_or_admin)):
+    cursor = db.users.find(
+        {"role": "user", "position": {"$regex": "Kurir", "$options": "i"}},
+        {"_id": 0, "password_hash": 0}
+    )
+    return [u async for u in cursor]
+
+
+@api.post("/monitoring/couriers/{user_id}/status")
+async def override_courier_status(user_id: str, payload: Dict[str, bool], _: Dict = Depends(require_supervisor_or_admin)):
+    available = payload.get("is_available", True)
+    await db.users.update_one({"id": user_id}, {"$set": {"is_available": available}})
+    return {"ok": True}
+
+
+@api.post("/users/me/location")
+async def update_my_location(payload: Dict[str, float], user: Dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_lat": payload.get("latitude"), "last_lng": payload.get("longitude")}}
+    )
+    return {"ok": True}
 
 
 @api.get("/documents/me")

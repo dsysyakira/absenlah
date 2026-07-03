@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
+import { Modal } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
@@ -31,6 +32,7 @@ export default function HomeScreen() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [today, setToday] = useState<TodayRec | null>(null);
   const [monthStats, setMonthStats] = useState<any>({});
+  const [announcement, setAnnouncement] = useState<any>(null);
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -66,9 +68,15 @@ export default function HomeScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get<{ today: TodayRec; month_stats: any }>("/attendance/me");
+      const [res, anns] = await Promise.all([
+        api.get<{ today: TodayRec; month_stats: any }>("/attendance/me"),
+        api.get<any[]>("/announcements"),
+      ]);
       setToday(res.today);
       setMonthStats(res.month_stats || {});
+      if (anns.length > 0 && anns[0].is_popup) {
+        setAnnouncement(anns[0]);
+      }
     } catch (e: any) {
       showToast(e?.message || "Load failed", "error");
     }
@@ -344,6 +352,17 @@ export default function HomeScreen() {
           )}
         </Card>
 
+        {/* Announcement Popup */}
+        <Modal visible={!!announcement} transparent animationType="fade" onRequestClose={() => setAnnouncement(null)}>
+          <View style={styles.modalOverlay}>
+            <Card style={styles.annModal}>
+              <H2>{announcement?.title}</H2>
+              <Body style={{ marginTop: 8 }}>{announcement?.content}</Body>
+              <Button title="Close" variant="outline" style={{ marginTop: 16 }} onPress={() => setAnnouncement(null)} />
+            </Card>
+          </View>
+        </Modal>
+
         {/* Monthly summary */}
         <Card style={{ gap: spacing.md }}>
           <H3>{t("monthly_summary")}</H3>
@@ -399,6 +418,8 @@ const StatCell: React.FC<{ label: string; value: string; color: string; testID?:
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: spacing.xl },
+  annModal: { width: "100%", gap: 4 },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   roleBadge: {
