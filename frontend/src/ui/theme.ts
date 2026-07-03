@@ -1,29 +1,29 @@
 export const colors = {
-  bg: "#F8F9FA",
-  surface: "#FFFFFF",
-  primary: "#0F172A",
-  accent: "#0052FF",
-  textPrimary: "#0F172A",
-  textSecondary: "#64748B",
-  border: "#E2E8F0",
-  success: "#10B981",
-  danger: "#EF4444",
-  warning: "#F59E0B",
-  info: "#3B82F6",
-  muted: "#F1F5F9",
+  bg: "#0A0C10", // Deep dark background
+  surface: "#161B22", // Premium card surface
+  primary: "#FFFFFF",
+  accent: "#2F81F7", // GitHub-like premium blue
+  textPrimary: "#F0F6FC",
+  textSecondary: "#8B949E",
+  border: "#30363D",
+  success: "#3FB950",
+  danger: "#F85149",
+  warning: "#D29922",
+  info: "#388BFD",
+  muted: "#21262D",
 };
 
-export const radii = { sm: 8, md: 12, lg: 16, xl: 20, pill: 999 };
+export const radii = { sm: 8, md: 14, lg: 20, xl: 28, pill: 999 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
 export const shadow = {
   card: {
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    shadowColor: "#000000",
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
 };
 

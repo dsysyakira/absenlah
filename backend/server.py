@@ -196,6 +196,7 @@ class CheckInIn(BaseModel):
     latitude: float
     longitude: float
     liveness_verified: bool = False
+    selfie_base64: Optional[str] = None
 
 
 class CheckOutIn(BaseModel):
@@ -848,6 +849,7 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
         "overtime_minutes": 0,
         "overtime_amount": 0,
         "liveness_verified": payload.liveness_verified,
+        "selfie_base64": payload.selfie_base64,
         "device_id": user.get("device_id"),
         "check_out_at": None,
         "early_departure": False,

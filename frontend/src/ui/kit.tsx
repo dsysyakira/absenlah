@@ -54,14 +54,14 @@ export const Button: React.FC<BtnProps> = ({
 }) => {
   const bg =
     variant === "primary"
-      ? colors.primary
+      ? colors.accent
       : variant === "danger"
         ? colors.danger
         : variant === "success"
           ? colors.success
           : "transparent";
   const border = variant === "outline" ? colors.border : "transparent";
-  const color = variant === "outline" || variant === "ghost" ? colors.primary : "#fff";
+  const color = "#fff";
   const height = size === "sm" ? 40 : size === "lg" ? 56 : 48;
   return (
     <TouchableOpacity
@@ -123,7 +123,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    ...shadow.card,
+    // Deeper premium feel
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   input: {
     borderWidth: 1,

@@ -314,6 +314,16 @@ step_configure_env() {
     read -r -s -p "$(echo -e "${C_BOLD}EXPO_TOKEN (Opsional, kosongkan [Enter] jika ingin BARE LOCAL BUILD)${C_RESET}: ")" expo_token
     echo ""
 
+    local build_type
+    build_type="$(ask "Pilih Output Build [1] APK (Preview), [2] AAB (Production)" "1")"
+    if [[ "$build_type" == "2" ]]; then
+        EXPO_BUILD_FORMAT="aab"
+        EXPO_BUILD_PROFILE="production"
+    else
+        EXPO_BUILD_FORMAT="apk"
+        EXPO_BUILD_PROFILE="preview"
+    fi
+
     local tz
     tz="$(ask "Server timezone" "Asia/Jakarta")"
 
@@ -334,6 +344,8 @@ ADMIN_EMAIL=${admin_email}
 JWT_SECRET=${jwt_secret}
 ENABLE_SSL=${enable_ssl}
 EXPO_TOKEN=${expo_token}
+EXPO_BUILD_FORMAT=${EXPO_BUILD_FORMAT}
+EXPO_BUILD_PROFILE=${EXPO_BUILD_PROFILE}
 
 # Backend Config (FastAPI)
 MONGO_URL=mongodb://mongodb:27017/absenlah
@@ -606,8 +618,8 @@ build_expo() {
     fi
 
     if [[ -n "${EXPO_TOKEN:-}" ]]; then
-        log "EXPO_TOKEN terdeteksi. Memulai Cloud EAS Build..."
-        npx eas-cli build --platform android --profile production --non-interactive --no-wait | tee -a "$LOG_FILE"
+        log "EXPO_TOKEN terdeteksi. Memulai Cloud EAS Build (${EXPO_BUILD_FORMAT:-apk})..."
+        npx eas-cli build --platform android --profile ${EXPO_BUILD_PROFILE:-preview} --non-interactive --no-wait | tee -a "$LOG_FILE"
         npx eas-cli build:list --limit 5 --json > "${out_dir}/eas-builds.json" 2>>"$LOG_FILE" || true
         echo "EAS builds have been queued. Track them with: eas build:list" > "${out_dir}/README.txt"
         ok "Cloud Build (EAS) submitted. Lihat status di Dashboard Expo Anda."
