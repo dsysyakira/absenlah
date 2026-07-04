@@ -151,6 +151,7 @@ class AnnouncementCreateIn(BaseModel):
     content: str
     is_popup: bool = True
     send_push: bool = True
+    duration_days: int = 7
 
 
 class UserCreate(BaseModel):
@@ -556,6 +557,8 @@ async def notify_division(division: Optional[str], message: str, exclude_user_id
 # ---------- Auth endpoints ----------
 @api.post("/auth/google-login")
 async def google_login(payload: GoogleAuthIn):
+    # Simulated validation of payload.google_id
+    # In production, use google-auth library to verify id_token
     user = await db.users.find_one({"$or": [{"google_id": payload.google_id}, {"email": payload.email}]})
     if not user:
         # Auto-register Google user
@@ -817,12 +820,8 @@ async def _validate_geofence(lat: float, lng: float, warehouse_id: Optional[str]
     if not wh:
         raise HTTPException(status_code=400, detail="Belum ada gudang terdaftar")
     dist = haversine_m(lat, lng, wh["latitude"], wh["longitude"])
-    if dist > wh["radius_m"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Lokasi di luar radius gudang ({int(dist)}m > {wh['radius_m']}m)",
-        )
-    return {"warehouse": wh, "distance_m": dist}
+    is_outside = dist > wh["radius_m"]
+    return {"warehouse": wh, "distance_m": dist, "is_outside": is_outside}
 
 
 @api.post("/attendance/check-in")
@@ -836,6 +835,9 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Anda sudah check-in hari ini")
 
     geo = await _validate_geofence(payload.latitude, payload.longitude, user.get("warehouse_id"))
+    status_label = "checked_in"
+    if geo["is_outside"]:
+        status_label = "pending_approval"
     cfg = await get_config()
 
     now = now_wib()
@@ -899,7 +901,8 @@ async def check_in(payload: CheckInIn, user: Dict = Depends(get_current_user)):
         "device_id": user.get("device_id"),
         "check_out_at": None,
         "early_departure": False,
-        "status": "checked_in",
+        "status": status_label,
+        "is_outside_geofence": geo["is_outside"],
         "manual": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -950,7 +953,10 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
     early_departure_deduction = 0
     early_departure_status = None
     early_departure_request_id = None
+    status_label = "completed"
+
     if early_departure:
+        status_label = "pending_approval"
         early_departure_status = "pending"
         early_departure_request_id = str(uuid.uuid4())
         await db.early_departure_requests.insert_one(
@@ -963,7 +969,7 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
                 "attendance_id": att["id"],
                 "date": today,
                 "requested_check_out_at": now.isoformat(),
-                "reason": None,
+                "reason": "Early Departure",
                 "status": "pending",
                 "reviewed_by": None,
                 "reviewed_at": None,
@@ -982,7 +988,7 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
         "early_departure_status": early_departure_status,
         "early_departure_request_id": early_departure_request_id,
         "early_departure_deduction": early_departure_deduction,
-        "status": "completed",
+        "status": status_label,
     }
     await db.attendance.update_one({"id": att["id"]}, {"$set": updates})
 
@@ -1118,46 +1124,17 @@ async def review_lateness(att_id: str, payload: LatenessReviewIn, actor: Dict = 
     return {"ok": True, "applied": payload.penalty_type}
 
 
-@api.post("/attendance/{att_id}/confirm-arrival")
-async def confirm_arrival(att_id: str, payload: ArrivalConfirmationIn, actor: Dict = Depends(require_supervisor_or_admin)):
+@api.post("/attendance/{att_id}/review-location")
+async def review_location(att_id: str, payload: Dict[str, bool], actor: Dict = Depends(require_supervisor_or_admin)):
     att = await db.attendance.find_one({"id": att_id})
-    if not att or not att.get("manual"):
-        raise HTTPException(status_code=404, detail="Manual attendance record not found")
+    if not att:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
 
-    cfg = await get_config()
-    arrival_dt = datetime.fromisoformat(payload.confirmed_arrival_at).replace(tzinfo=WIB)
-    check_in_dt = datetime.fromisoformat(att["check_in_at"]).replace(tzinfo=WIB)
+    approve = payload.get("approve", False)
+    new_status = "checked_in" if approve else "rejected"
 
-    hours_diff = (arrival_dt - check_in_dt).total_seconds() / 3600
-    arrival_status = "on_time"
-    penalty = 0
-    leave_deduction = 0
-
-    if hours_diff > 2:
-        # Check if arrived after 14:00
-        cutoff_14 = arrival_dt.replace(hour=14, minute=0, second=0, microsecond=0)
-        if arrival_dt > cutoff_14:
-            arrival_status = "late_penalty"
-            penalty = cfg.get("on_time_bonus", 20000)
-            leave_deduction = 1
-        else:
-            arrival_status = "late_no_penalty"  # Within 14:00 but > 2h (requires supervisor discretion)
-
-    await db.attendance.update_one(
-        {"id": att_id},
-        {
-            "$set": {
-                "arrival_confirmed_at": arrival_dt.isoformat(),
-                "arrival_status": arrival_status,
-                "penalty_amount": att.get("penalty_amount", 0) + penalty,
-                "leave_deduction": att.get("leave_deduction", 0) + leave_deduction,
-            }
-        },
-    )
-    if penalty or leave_deduction:
-        await bump_user_stats(att["user_id"], att["date"][:7], total_penalty=penalty, leave_count=leave_deduction)
-
-    return {"status": arrival_status, "penalty": penalty, "leave_deduction": leave_deduction}
+    await db.attendance.update_one({"id": att_id}, {"$set": {"status": new_status}})
+    return {"ok": True, "status": new_status}
 
 
 @api.get("/attendance/me")
@@ -1765,17 +1742,26 @@ async def my_activity_logs(user: Dict = Depends(get_current_user)):
 
 @api.get("/announcements")
 async def get_announcements(_: Dict = Depends(get_current_user)):
-    cursor = db.announcements.find({}, {"_id": 0}).sort("created_at", -1).limit(10)
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = db.announcements.find({"expiry_at": {"$gt": now}}, {"_id": 0}).sort("created_at", -1).limit(10)
     return [d async for d in cursor]
+
+
+@api.delete("/announcements/{id}")
+async def delete_announcement(id: str, _: Dict = Depends(require_supervisor_or_admin)):
+    await db.announcements.delete_one({"id": id})
+    return {"ok": True}
 
 
 @api.post("/announcements")
 async def create_announcement(payload: AnnouncementCreateIn, _: Dict = Depends(require_supervisor_or_admin)):
+    expiry = datetime.now(timezone.utc) + timedelta(days=payload.duration_days)
     doc = {
         "id": str(uuid.uuid4()),
         "title": payload.title,
         "content": payload.content,
         "is_popup": payload.is_popup,
+        "expiry_at": expiry.isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.announcements.insert_one(doc)
@@ -1863,13 +1849,13 @@ async def update_my_location(payload: Dict[str, float], user: Dict = Depends(get
 
 @api.get("/documents/me")
 async def my_documents(user: Dict = Depends(get_current_user)):
-    # Simulation of payslips
+    # Simulation of unique payslips
     return [
         {
-            "id": "payslip-01",
-            "title": f"Slip Gaji {month_wib_str()}",
+            "id": f"payslip-{user['id']}-{month_wib_str()}",
+            "title": f"Slip Gaji - {now_wib().strftime('%B %Y')}",
             "type": "payslip",
-            "url": "https://example.com/payslip.pdf",
+            "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
     ]

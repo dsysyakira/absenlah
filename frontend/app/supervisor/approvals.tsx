@@ -17,7 +17,7 @@ import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
 import { colors, formatDate, formatTime, radii, spacing } from "@/src/ui/theme";
 import { showToast } from "@/src/ui/Toast";
 
-type Tab = "early_departure" | "emergency" | "lateness" | "manual";
+type Tab = "early_departure" | "emergency" | "lateness" | "out_of_bounds";
 
 export default function ApprovalsScreen() {
   const { t } = useI18n();
@@ -37,12 +37,12 @@ export default function ApprovalsScreen() {
         api.get<any[]>("/early-departure/pending"),
         api.get<any[]>("/emergency/pending"),
         api.get<any>("/attendance/reports?is_late=true"),
-        api.get<any>("/attendance/reports?manual=true&arrival_status=pending"),
+        api.get<any>("/attendance/reports?is_outside_geofence=true"),
       ]);
       setEd(a);
       setEm(b);
       setLate((c.records || []).filter((r: any) => !r.lateness_reviewed));
-      setManual(d.records || []);
+      setManual((d.records || []).filter((r: any) => r.status === "pending_approval"));
     } catch (e: any) {
       showToast(e?.message || "Load failed", "error");
     }
@@ -87,13 +87,11 @@ export default function ApprovalsScreen() {
     }
   };
 
-  const confirmArrival = async (id: string) => {
+  const approveLocation = async (id: string) => {
     setBusyId(id);
     try {
-      await api.post(`/attendance/${id}/confirm-arrival`, {
-        confirmed_arrival_at: new Date().toISOString(),
-      });
-      showToast("Arrival confirmed", "success");
+      await api.post(`/attendance/${id}/review-location`, { approve: true });
+      showToast("Location approved", "success");
       await load();
     } catch (e: any) {
       showToast(e?.message || t("error"), "error");
@@ -126,7 +124,7 @@ export default function ApprovalsScreen() {
           <TabChip label={t("tab_early_departure")} count={ed.length} active={tab === "early_departure"} onPress={() => setTab("early_departure")} />
           <TabChip label={t("tab_emergency")} count={em.length} active={tab === "emergency"} onPress={() => setTab("emergency")} />
           <TabChip label={t("late")} count={late.length} active={tab === "lateness"} onPress={() => setTab("lateness")} />
-          <TabChip label="Manual" count={manual.length} active={tab === "manual"} onPress={() => setTab("manual")} />
+          <TabChip label="Location" count={manual.length} active={tab === "out_of_bounds"} onPress={() => setTab("out_of_bounds")} />
         </View>
       </ScrollView>
 
@@ -160,9 +158,9 @@ export default function ApprovalsScreen() {
                   {t("late")}: {r.late_minutes} {t("minutes")}
                 </Muted>
               )}
-              {tab === "manual" && (
+              {tab === "out_of_bounds" && (
                 <Muted>
-                  Limit Arrival: {formatTime(r.arrival_limit_at)}
+                  Distance: {r.distance_m}m outside
                 </Muted>
               )}
               {tab === "emergency" && (
@@ -208,12 +206,12 @@ export default function ApprovalsScreen() {
                       style={{ flex: 1 }}
                     />
                   </View>
-                ) : tab === "manual" ? (
+                ) : tab === "out_of_bounds" ? (
                   <Button
-                    title="Konfirmasi Kedatangan"
+                    title="Approve Location"
                     variant="success"
                     size="sm"
-                    onPress={() => confirmArrival(r.id)}
+                    onPress={() => approveLocation(r.id)}
                     loading={busyId === r.id}
                   />
                 ) : (

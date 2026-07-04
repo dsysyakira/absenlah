@@ -18,7 +18,8 @@ import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H1, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, formatRupiah, formatTime, radii, spacing } from "@/src/ui/theme";
+import { formatRupiah, formatTime, radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 type TodayRec = any;
@@ -26,6 +27,7 @@ type TodayRec = any;
 export default function HomeScreen() {
   const { t, lang } = useI18n();
   const { user } = useAuth();
+  const { colors } = useTheme();
 
   const [now, setNow] = useState(new Date());
   const [locStatus, setLocStatus] = useState<"idle" | "loading" | "granted" | "denied">("idle");
@@ -77,7 +79,10 @@ export default function HomeScreen() {
       setToday(res.today);
       setMonthStats(res.month_stats || {});
       setPerfBonuses(reports.performance_bonuses);
-      if (anns.length > 0 && anns[0].is_popup) {
+
+      // Check if we already saw this announcement (simulation)
+      const lastSeen = await storage.getItem("last_ann_id", "");
+      if (anns.length > 0 && anns[0].is_popup && anns[0].id !== lastSeen) {
         setAnnouncement(anns[0]);
       }
     } catch (e: any) {
@@ -177,7 +182,7 @@ export default function HomeScreen() {
   const canCheckOut = today && !today.check_out_at;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -219,8 +224,12 @@ export default function HomeScreen() {
                   <body>
                     <div id="map"></div>
                     <script>
-                      var map = L.map('map').setView([${coords.latitude}, ${coords.longitude}], 15);
-                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                      var map = L.map('map', { zoomControl: false }).setView([${coords.latitude}, ${coords.longitude}], 15);
+                      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                        subdomains: 'abcd',
+                        maxZoom: 20
+                      }).addTo(map);
                       L.marker([${coords.latitude}, ${coords.longitude}]).addTo(map);
                     </script>
                   </body>
@@ -361,7 +370,10 @@ export default function HomeScreen() {
             <Card style={styles.annModal}>
               <H2>{announcement?.title}</H2>
               <Body style={{ marginTop: 8 }}>{announcement?.content}</Body>
-              <Button title="Close" variant="outline" style={{ marginTop: 16 }} onPress={() => setAnnouncement(null)} />
+              <Button title="Close" variant="outline" style={{ marginTop: 16 }} onPress={async () => {
+                if (announcement) await storage.setItem("last_ann_id", announcement.id);
+                setAnnouncement(null);
+              }} />
             </Card>
           </View>
         </Modal>
@@ -436,7 +448,7 @@ const StatCell: React.FC<{ label: string; value: string; color: string; testID?:
 );
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: spacing.xl },
   annModal: { width: "100%", gap: 4 },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },

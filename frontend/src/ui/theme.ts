@@ -1,17 +1,34 @@
-export const colors = {
-  bg: "#0A0C10", // Deep dark background
-  surface: "#161B22", // Premium card surface
+export const darkTheme = {
+  bg: "#08090A", // Obsidian black
+  surface: "#111418", // Deep space gray
   primary: "#FFFFFF",
-  accent: "#2F81F7", // GitHub-like premium blue
+  accent: "#00E5FF", // Futuristic neon cyan
   textPrimary: "#F0F6FC",
-  textSecondary: "#8B949E",
-  border: "#30363D",
-  success: "#3FB950",
-  danger: "#F85149",
-  warning: "#D29922",
-  info: "#388BFD",
-  muted: "#21262D",
+  textSecondary: "#90A4AE",
+  border: "#1F2937",
+  success: "#00C853",
+  danger: "#FF1744",
+  warning: "#FFEA00",
+  info: "#2979FF",
+  muted: "#1A1D23",
 };
+
+export const lightTheme = {
+  bg: "#F0F2F5", // Clean high-end white
+  surface: "#FFFFFF",
+  primary: "#0F172A",
+  accent: "#007BFF", // Deep royal blue
+  textPrimary: "#1E293B",
+  textSecondary: "#64748B",
+  border: "#E2E8F0",
+  success: "#10B981",
+  danger: "#EF4444",
+  warning: "#F59E0B",
+  info: "#3B82F6",
+  muted: "#F8FAFC",
+};
+
+export let colors = darkTheme; // Default
 
 export const radii = { sm: 8, md: 14, lg: 20, xl: 28, pill: 999 };
 

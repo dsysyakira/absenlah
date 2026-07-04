@@ -310,6 +310,11 @@ step_configure_env() {
         jwt_secret="$(ask_secret "JWT secret")"
     fi
 
+    local google_client_id
+    google_client_id="$(ask "Google Client ID (hit Enter to skip)" "")"
+    local google_client_secret
+    google_client_secret="$(ask "Google Client Secret (hit Enter to skip)" "")"
+
     local expo_token
     read -r -s -p "$(echo -e "${C_BOLD}EXPO_TOKEN (Opsional, kosongkan [Enter] jika ingin BARE LOCAL BUILD)${C_RESET}: ")" expo_token
     echo ""
@@ -342,6 +347,8 @@ DOMAIN=${domain}
 TZ=${tz}
 ADMIN_EMAIL=${admin_email}
 JWT_SECRET=${jwt_secret}
+GOOGLE_CLIENT_ID=${google_client_id}
+GOOGLE_CLIENT_SECRET=${google_client_secret}
 ENABLE_SSL=${enable_ssl}
 EXPO_TOKEN=${expo_token}
 EXPO_BUILD_FORMAT=${EXPO_BUILD_FORMAT}

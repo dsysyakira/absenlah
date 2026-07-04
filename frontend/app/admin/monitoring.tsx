@@ -48,18 +48,35 @@ export default function CourierMonitoringScreen() {
       <body>
         <div id="map"></div>
         <script>
-          var map = L.map('map').setView([-6.2088, 106.8456], 12);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-          ${couriers
-            .filter((c) => c.last_lat)
-            .map(
-              (c) => `
-            L.marker([${c.last_lat}, ${c.last_lng}])
-              .addTo(map)
-              .bindPopup('<b>${c.name}</b><br>${c.is_available ? "Tersedia" : "Sedang Tugas"}');
-          `,
-            )
-            .join("")}
+          var map = L.map('map', { zoomControl: false }).setView([-6.2088, 106.8456], 12);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 20
+          }).addTo(map);
+
+          var markers = {};
+
+          function updateMarkers(data) {
+            data.forEach(c => {
+              if (!c.last_lat) return;
+              var pos = [c.last_lat, c.last_lng];
+              if (markers[c.id]) {
+                markers[c.id].setLatLng(pos);
+              } else {
+                var color = c.is_available ? "#3FB950" : "#F85149";
+                var icon = L.divIcon({
+                  html: '<div style="background-color:'+color+';width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>',
+                  className: 'custom-div-icon',
+                  iconSize: [12, 12],
+                  iconAnchor: [6, 6]
+                });
+                markers[c.id] = L.marker(pos, { icon: icon }).addTo(map).bindPopup('<b>'+c.name+'</b>');
+              }
+            });
+          }
+
+          var couriers = ${JSON.stringify(couriers)};
+          updateMarkers(couriers);
         </script>
       </body>
     </html>

@@ -6,11 +6,13 @@ import { useRouter } from "expo-router";
 import { useI18n, setLang } from "@/src/i18n";
 import { useAuth } from "@/src/auth/AuthContext";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 
 export default function ProfileScreen() {
   const { t, lang } = useI18n();
   const { user, logout, refreshMe } = useAuth();
+  const { colors, toggleTheme } = useTheme();
   const router = useRouter();
 
   const isAdmin = user?.role === "admin";
@@ -23,6 +25,9 @@ export default function ProfileScreen() {
 
   const changePhoto = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
       base64: true,
       quality: 0.5,
     });
@@ -38,7 +43,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <TouchableOpacity onPress={changePhoto} style={styles.avatar}>
@@ -96,6 +101,12 @@ export default function ProfileScreen() {
             label={t("change_password")}
             onPress={() => router.push("/change-password")}
             testID="menu-change-password"
+          />
+          <MenuItem
+            icon="contrast-outline"
+            label="Toggle Theme"
+            onPress={toggleTheme}
+            testID="menu-toggle-theme"
           />
           <MenuItem
             icon="document-text-outline"
@@ -193,16 +204,19 @@ const MenuItem: React.FC<{
   label: string;
   onPress: () => void;
   testID?: string;
-}> = ({ icon, label, onPress, testID }) => (
-  <TouchableOpacity onPress={onPress} style={styles.menu} testID={testID}>
-    <Ionicons name={icon} size={20} color={colors.primary} />
-    <Body style={{ flex: 1, fontWeight: "600" }}>{label}</Body>
-    <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-  </TouchableOpacity>
-);
+}> = ({ icon, label, onPress, testID }) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.menu, { borderBottomColor: colors.border }]} testID={testID}>
+      <Ionicons name={icon} size={20} color={colors.accent} />
+      <Body style={{ flex: 1, fontWeight: "600" }}>{label}</Body>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   avatarImg: { width: "100%", height: "100%", borderRadius: 36 },
   editIcon: {
     position: "absolute",

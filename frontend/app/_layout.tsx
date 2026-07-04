@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/auth/AuthContext";
 import { initLanguage } from "@/src/i18n";
+import { ThemeProvider } from "@/src/ui/ThemeContext";
 import { ToastHost } from "@/src/ui/Toast";
 
 LogBox.ignoreAllLogs(true);
@@ -30,12 +31,14 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <View style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }} />
-          <ToastHost />
-        </View>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <View style={{ flex: 1 }}>
+            <Stack screenOptions={{ headerShown: false }} />
+            <ToastHost />
+          </View>
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

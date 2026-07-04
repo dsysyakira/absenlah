@@ -11,30 +11,38 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { colors, radii, spacing, shadow } from "./theme";
+import { radii, spacing, shadow } from "./theme";
+import { useTheme } from "./ThemeContext";
 
-export const H1: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.h1, style]} />
-);
-export const H2: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.h2, style]} />
-);
-export const H3: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.h3, style]} />
-);
-export const Body: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.body, style]} />
-);
-export const Muted: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.muted, style]} />
-);
-export const Label: React.FC<TextProps> = ({ style, ...p }) => (
-  <Text {...p} style={[styles.label, style]} />
-);
+export const H1: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.h1, { color: colors.textPrimary }, style]} />;
+};
+export const H2: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.h2, { color: colors.textPrimary }, style]} />;
+};
+export const H3: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.h3, { color: colors.textPrimary }, style]} />;
+};
+export const Body: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.body, { color: colors.textPrimary }, style]} />;
+};
+export const Muted: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.muted, { color: colors.textSecondary }, style]} />;
+};
+export const Label: React.FC<TextProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <Text {...p} style={[styles.label, { color: colors.textSecondary }, style]} />;
+};
 
-export const Card: React.FC<ViewProps> = ({ style, ...p }) => (
-  <View {...p} style={[styles.card, style]} />
-);
+export const Card: React.FC<ViewProps> = ({ style, ...p }) => {
+  const { colors } = useTheme();
+  return <View {...p} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]} />;
+};
 
 type BtnProps = TouchableOpacityProps & {
   title: string;
@@ -52,6 +60,7 @@ export const Button: React.FC<BtnProps> = ({
   disabled,
   ...rest
 }) => {
+  const { colors } = useTheme();
   const bg =
     variant === "primary"
       ? colors.accent
@@ -93,35 +102,35 @@ export const Button: React.FC<BtnProps> = ({
 };
 
 type InputProps = TextInputProps & { label?: string };
-export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => (
-  <View style={{ gap: 6 }}>
-    {label ? <Label>{label}</Label> : null}
-    <TextInput
-      placeholderTextColor={colors.textSecondary}
-      {...rest}
-      style={[styles.input, style]}
-    />
-  </View>
-);
+export const Input: React.FC<InputProps> = ({ label, style, ...rest }) => {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: 6 }}>
+      {label ? <Label>{label}</Label> : null}
+      <TextInput
+        placeholderTextColor={colors.textSecondary}
+        {...rest}
+        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }, style]}
+      />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  h1: { fontSize: 30, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.5 },
-  h2: { fontSize: 22, fontWeight: "700", color: colors.textPrimary, letterSpacing: -0.3 },
-  h3: { fontSize: 17, fontWeight: "700", color: colors.textPrimary },
-  body: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
-  muted: { fontSize: 13, color: colors.textSecondary },
+  h1: { fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
+  h2: { fontSize: 22, fontWeight: "700", letterSpacing: -0.3 },
+  h3: { fontSize: 17, fontWeight: "700" },
+  body: { fontSize: 15, lineHeight: 21 },
+  muted: { fontSize: 13 },
   label: {
     fontSize: 11,
-    color: colors.textSecondary,
     fontWeight: "700",
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
     // Deeper premium feel
     shadowColor: "#000",
