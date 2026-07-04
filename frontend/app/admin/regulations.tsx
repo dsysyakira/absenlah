@@ -14,11 +14,13 @@ import { Stack, useRouter } from "expo-router";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Button, H2, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function RegulationsAdmin() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,7 +50,7 @@ export default function RegulationsAdmin() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
@@ -84,7 +86,7 @@ export default function RegulationsAdmin() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -95,13 +97,10 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   textarea: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
     minHeight: 320,
     textAlignVertical: "top",
     fontSize: 15,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
   },
 });

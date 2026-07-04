@@ -11,13 +11,15 @@ import { useI18n } from "@/src/i18n";
 import { api, getToken } from "@/src/api/client";
 import { useAuth } from "@/src/auth/AuthContext";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, formatDate, formatRupiah, radii, spacing } from "@/src/ui/theme";
+import { formatDate, formatRupiah, radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 type Period = "daily" | "weekly" | "monthly";
 
 export default function ReportsScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>("monthly");
   const [data, setData] = useState<any>(null);
@@ -58,7 +60,7 @@ export default function ReportsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <View style={styles.header}>
         <H2>{t("reports")}</H2>
       </View>
@@ -173,15 +175,18 @@ const Stat: React.FC<{ label: string; value: string; color: string }> = ({
   label,
   value,
   color,
-}) => (
-  <View style={styles.statCell}>
-    <Muted style={{ fontSize: 10 }}>{label}</Muted>
-    <Body style={{ fontWeight: "800", fontSize: 15, color, marginTop: 2 }}>{value}</Body>
-  </View>
-);
+}) => {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.statCell, { backgroundColor: colors.muted }]}>
+      <Muted style={{ fontSize: 10 }}>{label}</Muted>
+      <Body style={{ fontWeight: "800", fontSize: 15, color, marginTop: 2 }}>{value}</Body>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     padding: spacing.lg,
     paddingBottom: spacing.sm,

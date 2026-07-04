@@ -4,11 +4,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, formatDate, spacing } from "@/src/ui/theme";
+import { formatDate, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function LogbookScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const [logs, setLogs] = useState<any[]>([]);
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,7 @@ export default function LogbookScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <View style={styles.header}>
         <H2>Logbook</H2>
         <Muted>{t("indonesian") === "Bahasa Indonesia" ? "Catatan Aktivitas Harian" : "Daily Activity Logs"}</Muted>
@@ -94,7 +96,7 @@ export default function LogbookScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: { padding: spacing.lg, paddingBottom: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

@@ -9,11 +9,13 @@ import { WebView } from "react-native-webview";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function JobTrackingScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [jobs, setJobs] = useState<any[]>([]);
   const [coords, setCoords] = useState<any>(null);
@@ -68,11 +70,11 @@ export default function JobTrackingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ title: "Job Tracking", headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>Job Tracking</H2>
         <View style={{ width: 22 }} />
@@ -143,7 +145,7 @@ const Badge = ({ status }: any) => {
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, paddingBottom: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   mapCard: { height: 180, padding: 0, overflow: "hidden" },

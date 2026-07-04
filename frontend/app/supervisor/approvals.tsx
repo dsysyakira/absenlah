@@ -14,13 +14,15 @@ import { Stack, useRouter } from "expo-router";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, formatDate, formatTime, radii, spacing } from "@/src/ui/theme";
+import { formatDate, formatTime, radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 type Tab = "early_departure" | "emergency" | "lateness" | "out_of_bounds";
 
 export default function ApprovalsScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("early_departure");
   const [ed, setEd] = useState<any[]>([]);
@@ -109,11 +111,11 @@ export default function ApprovalsScreen() {
   const list = getList();
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>{t("approvals_inbox")}</H2>
         <View style={{ width: 22 }} />
@@ -267,26 +269,29 @@ export default function ApprovalsScreen() {
   );
 }
 
-const TabChip = ({ label, count, active, onPress }: any) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[styles.chip, active && styles.chipActive]}
-  >
-    <Body
-      numberOfLines={1}
-      style={{
-        color: active ? "#fff" : colors.primary,
-        fontWeight: "600",
-        fontSize: 12,
-      }}
+const TabChip = ({ label, count, active, onPress }: any) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.chip, { backgroundColor: colors.surface, borderColor: colors.border }, active && styles.chipActive]}
     >
-      {label} ({count})
-    </Body>
-  </TouchableOpacity>
-);
+      <Body
+        numberOfLines={1}
+        style={{
+          color: active ? "#fff" : colors.textPrimary,
+          fontWeight: "600",
+          fontSize: 12,
+        }}
+      >
+        {label} ({count})
+      </Body>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   chipsRowScroll: { flexGrow: 0, maxHeight: 52 },
   header: {
     flexDirection: "row",

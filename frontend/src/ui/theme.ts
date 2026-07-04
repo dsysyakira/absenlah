@@ -1,31 +1,33 @@
 export const darkTheme = {
-  bg: "#08090A", // Obsidian black
-  surface: "#111418", // Deep space gray
+  bg: "#040506", // Absolute Obsidian
+  surface: "#12141D", // Cyber surface
   primary: "#FFFFFF",
-  accent: "#00E5FF", // Futuristic neon cyan
-  textPrimary: "#F0F6FC",
-  textSecondary: "#90A4AE",
-  border: "#1F2937",
-  success: "#00C853",
-  danger: "#FF1744",
-  warning: "#FFEA00",
-  info: "#2979FF",
-  muted: "#1A1D23",
-};
-
-export const lightTheme = {
-  bg: "#F0F2F5", // Clean high-end white
-  surface: "#FFFFFF",
-  primary: "#0F172A",
-  accent: "#007BFF", // Deep royal blue
-  textPrimary: "#1E293B",
-  textSecondary: "#64748B",
-  border: "#E2E8F0",
+  accent: "#00F5FF", // Cyber Neon Cyan
+  textPrimary: "#E0E6ED",
+  textSecondary: "#94A3B8",
+  border: "#1E293B",
   success: "#10B981",
   danger: "#EF4444",
   warning: "#F59E0B",
   info: "#3B82F6",
-  muted: "#F8FAFC",
+  muted: "#0F172A",
+  glass: "rgba(30, 41, 59, 0.5)",
+};
+
+export const lightTheme = {
+  bg: "#F8FAFC", // Clean Pearl
+  surface: "#FFFFFF",
+  primary: "#0F172A",
+  accent: "#2563EB", // Royal Blue
+  textPrimary: "#1E293B",
+  textSecondary: "#64748B",
+  border: "#E2E8F0",
+  success: "#059669",
+  danger: "#DC2626",
+  warning: "#D97706",
+  info: "#2563EB",
+  muted: "#F1F5F9",
+  glass: "rgba(255, 255, 255, 0.7)",
 };
 
 export let colors = darkTheme; // Default

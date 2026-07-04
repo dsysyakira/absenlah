@@ -12,11 +12,13 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n, setLang } from "@/src/i18n";
 import { Button, Card, H1, H3, Input, Muted, Body } from "@/src/ui/kit";
-import { colors, spacing } from "@/src/ui/theme";
+import { spacing, colors as staticColors } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function LoginScreen() {
   const { t, lang } = useI18n();
+  const { colors } = useTheme();
   const { login } = useAuth();
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -44,7 +46,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -54,7 +56,16 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <View style={styles.logo} testID="app-logo">
+            <View
+              style={[
+                styles.logo,
+                {
+                  backgroundColor: colors.accent,
+                  shadowColor: colors.accent,
+                },
+              ]}
+              testID="app-logo"
+            >
               <Body style={{ color: "#fff", fontWeight: "800", fontSize: 20 }}>A</Body>
             </View>
             <H1 style={{ marginTop: spacing.lg }}>Absenlah</H1>
@@ -90,6 +101,17 @@ export default function LoginScreen() {
               size="lg"
               testID="login-submit-button"
             />
+            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 8 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+              <Muted style={{ marginHorizontal: 10 }}>OR</Muted>
+              <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            </View>
+            <Button
+              title="Sign in with Google"
+              variant="outline"
+              onPress={() => showToast("Google Login Coming Soon", "info")}
+              testID="google-login-button"
+            />
             <Muted style={{ textAlign: "center", marginTop: 4 }}>
               {t("default_admin_hint")}
             </Muted>
@@ -99,7 +121,11 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => setLang("id")}
               testID="lang-id-button"
-              style={[styles.langChip, lang === "id" && styles.langActive]}
+              style={[
+                styles.langChip,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                lang === "id" && { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
             >
               <Body style={{ fontWeight: "600", color: lang === "id" ? "#fff" : colors.primary }}>
                 ID
@@ -108,7 +134,11 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => setLang("en")}
               testID="lang-en-button"
-              style={[styles.langChip, lang === "en" && styles.langActive]}
+              style={[
+                styles.langChip,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                lang === "en" && { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
             >
               <Body style={{ fontWeight: "600", color: lang === "en" ? "#fff" : colors.primary }}>
                 EN
@@ -122,17 +152,15 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   scroll: { padding: spacing.lg, gap: spacing.xl, flexGrow: 1, justifyContent: "center" },
   header: { alignItems: "center", marginBottom: spacing.xl },
   logo: {
     width: 80,
     height: 80,
     borderRadius: 24,
-    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 15,
@@ -144,8 +172,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
   },
-  langActive: { backgroundColor: colors.primary, borderColor: colors.primary },
 });

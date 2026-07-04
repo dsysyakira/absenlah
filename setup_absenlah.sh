@@ -320,7 +320,7 @@ step_configure_env() {
     echo ""
 
     local build_type
-    build_type="$(ask "Pilih Output Build [1] APK (Preview), [2] AAB (Production)" "1")"
+    build_type="$(ask "Pilih Output Build [1] APK (Preview/Debug), [2] AAB (Production/Play Store)" "1")"
     if [[ "$build_type" == "2" ]]; then
         EXPO_BUILD_FORMAT="aab"
         EXPO_BUILD_PROFILE="production"

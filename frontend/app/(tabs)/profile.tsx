@@ -2,10 +2,13 @@ import React from "react";
 import { View, StyleSheet, ScrollView, TouchableOpacity, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useI18n, setLang } from "@/src/i18n";
 import { useAuth } from "@/src/auth/AuthContext";
+import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
+import { showToast } from "@/src/ui/Toast";
 import { radii, spacing } from "@/src/ui/theme";
 import { useTheme } from "@/src/ui/ThemeContext";
 
@@ -24,13 +27,27 @@ export default function ProfileScreen() {
   };
 
   const changePhoto = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      base64: true,
-      quality: 0.5,
-    });
+    const { Alert } = await import("react-native");
+    Alert.alert(t("profile_photo"), "Pilih sumber foto", [
+        { text: "Kamera", onPress: () => pickPhoto("camera") },
+        { text: "Galeri", onPress: () => pickPhoto("gallery") },
+        { text: t("cancel"), style: "cancel" }
+    ]);
+  };
+
+  const pickPhoto = async (mode: "camera" | "gallery") => {
+    const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        base64: true,
+        quality: 0.5,
+    };
+
+    const res = mode === "camera"
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+
     if (!res.canceled && res.assets[0].base64) {
       try {
         await api.post("/auth/profile", { profile_photo_base64: res.assets[0].base64 });
@@ -178,12 +195,6 @@ export default function ProfileScreen() {
               label={t("approvals_inbox")}
               onPress={() => router.push("/supervisor/approvals")}
               testID="menu-approvals"
-            />
-            <MenuItem
-              icon="clipboard-outline"
-              label={t("manual_attendance")}
-              onPress={() => router.push("/supervisor/manual")}
-              testID="menu-manual-attendance"
             />
           </Card>
         )}

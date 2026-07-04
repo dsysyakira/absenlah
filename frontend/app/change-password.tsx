@@ -5,11 +5,13 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
 import { Button, Card, H2, Input, Muted } from "@/src/ui/kit";
-import { colors, spacing } from "@/src/ui/theme";
+import { spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function ChangePasswordScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const { user, changePassword, logout } = useAuth();
   const router = useRouter();
   const [current, setCurrent] = useState("");
@@ -39,7 +41,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -95,6 +97,6 @@ export default function ChangePasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   scroll: { padding: spacing.lg, gap: spacing.lg, flexGrow: 1, justifyContent: "center" },
 });

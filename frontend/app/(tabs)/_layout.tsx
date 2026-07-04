@@ -5,11 +5,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
-import { colors } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 
 export default function TabsLayout() {
   const { t } = useI18n();
   const { user, loading } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -19,7 +20,7 @@ export default function TabsLayout() {
     else if (user.must_change_password) router.replace("/change-password");
   }, [user, loading, router]);
 
-  if (!user) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (!user) return <View style={{ flex: 1 }} />;
 
   return (
     <Tabs

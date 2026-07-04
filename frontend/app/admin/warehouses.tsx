@@ -15,11 +15,13 @@ import * as Location from "expo-location";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function WarehousesAdmin() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [modal, setModal] = useState(false);
@@ -117,14 +119,18 @@ export default function WarehousesAdmin() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>{t("manage_warehouses")}</H2>
-        <TouchableOpacity onPress={openAdd} testID="add-warehouse-button" style={styles.addBtn}>
+        <TouchableOpacity
+          onPress={openAdd}
+          testID="add-warehouse-button"
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
+        >
           <Ionicons name="add" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -171,7 +177,7 @@ export default function WarehousesAdmin() {
         <View style={styles.overlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.sheet}
+            style={[styles.sheet, { backgroundColor: colors.surface }]}
           >
             <ScrollView contentContainerStyle={{ gap: spacing.md }}>
               <View style={styles.row}>
@@ -236,7 +242,7 @@ export default function WarehousesAdmin() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -245,7 +251,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   addBtn: {
-    backgroundColor: colors.primary,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -256,7 +261,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   overlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: colors.surface,
     padding: spacing.lg,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,

@@ -2,10 +2,11 @@ import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/auth/AuthContext";
-import { colors } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 
 export default function Index() {
   const { user, loading } = useAuth();
+  const { colors } = useTheme();
   const router = useRouter();
 
   useEffect(() => {

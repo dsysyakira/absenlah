@@ -17,13 +17,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, formatDate, formatRupiah, formatTime, radii, spacing } from "@/src/ui/theme";
+import { formatDate, formatRupiah, formatTime, radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 type Section = "attendance" | "lateness" | "early_departure" | "emergency";
 
 export default function AttendanceScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const [section, setSection] = useState<Section>("attendance");
   const [refreshing, setRefreshing] = useState(false);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -63,7 +65,7 @@ export default function AttendanceScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <View style={styles.header}>
         <H2>{t("my_history")}</H2>
         {section === "emergency" && (
@@ -99,7 +101,7 @@ export default function AttendanceScreen() {
           >
             <Body
               style={{
-                color: section === key ? "#fff" : colors.primary,
+                color: section === key ? "#fff" : colors.textPrimary,
                 fontWeight: "600",
                 fontSize: 12,
               }}
@@ -280,6 +282,7 @@ const EarlyDepartureSection: React.FC<{ items: any[] }> = ({ items }) => {
 
 const EmergencySection: React.FC<{ items: any[]; quota: any }> = ({ items, quota }) => {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const [proofView, setProofView] = useState<string | null>(null);
   return (
     <>
@@ -370,6 +373,7 @@ const EmergencyModal: React.FC<{
   onSaved: () => void;
 }> = ({ visible, onClose, onSaved }) => {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
   const [proof, setProof] = useState<string | null>(null);
@@ -523,7 +527,7 @@ function uriFromBase64(v: string): string {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     padding: spacing.lg,
     paddingBottom: spacing.sm,

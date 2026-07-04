@@ -16,6 +16,7 @@ import { Modal } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAuth } from "@/src/auth/AuthContext";
 import { useI18n } from "@/src/i18n";
+import { storage } from "@/src/utils/storage";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H1, H2, H3, Muted } from "@/src/ui/kit";
 import { formatRupiah, formatTime, radii, spacing } from "@/src/ui/theme";
@@ -27,7 +28,7 @@ type TodayRec = any;
 export default function HomeScreen() {
   const { t, lang } = useI18n();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, theme } = useTheme();
 
   const [now, setNow] = useState(new Date());
   const [locStatus, setLocStatus] = useState<"idle" | "loading" | "granted" | "denied">("idle");
@@ -225,8 +226,8 @@ export default function HomeScreen() {
                     <div id="map"></div>
                     <script>
                       var map = L.map('map', { zoomControl: false }).setView([${coords.latitude}, ${coords.longitude}], 15);
-                      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                      var style = "${theme === "dark" ? "dark_all" : "voyager"}";
+                      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png', {
                         subdomains: 'abcd',
                         maxZoom: 20
                       }).addTo(map);

@@ -16,11 +16,13 @@ import { useI18n } from "@/src/i18n";
 import { useAuth } from "@/src/auth/AuthContext";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, formatDate, radii, spacing } from "@/src/ui/theme";
+import { formatDate, radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function LeaveScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const { user } = useAuth();
   const [tab, setTab] = useState<"division" | "mine">("division");
   const [division, setDivision] = useState<any[]>([]);
@@ -90,11 +92,11 @@ export default function LeaveScreen() {
   const list = useMemo(() => (tab === "division" ? division : mine), [tab, division, mine]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <View style={styles.header}>
         <H2>{t("leave")}</H2>
         <TouchableOpacity
-          style={styles.addBtn}
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
           onPress={() => setModal(true)}
           testID="request-leave-button"
         >
@@ -172,7 +174,7 @@ export default function LeaveScreen() {
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.modalSheet}
+            style={[styles.modalSheet, { backgroundColor: colors.surface }]}
           >
             <View style={styles.modalHeader}>
               <H3>{t("request_leave")}</H3>
@@ -197,7 +199,14 @@ export default function LeaveScreen() {
                 numberOfLines={3}
                 placeholder={t("reason")}
                 placeholderTextColor={colors.textSecondary}
-                style={styles.textarea}
+                style={[
+                  styles.textarea,
+                  {
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
                 testID="leave-reason-input"
               />
             </View>
@@ -220,23 +229,30 @@ const TabChip: React.FC<{
   active: boolean;
   onPress: () => void;
   testID?: string;
-}> = ({ label, active, onPress, testID }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[styles.chip, active && styles.chipActive]}
-    testID={testID}
-  >
-    <Body
-      style={{
-        color: active ? "#fff" : colors.primary,
-        fontWeight: "600",
-        fontSize: 13,
-      }}
+}> = ({ label, active, onPress, testID }) => {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.chip,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        active && { backgroundColor: colors.primary, borderColor: colors.primary },
+      ]}
+      testID={testID}
     >
-      {label}
-    </Body>
-  </TouchableOpacity>
-);
+      <Body
+        style={{
+          color: active ? "#fff" : colors.primary,
+          fontWeight: "600",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Body>
+    </TouchableOpacity>
+  );
+};
 
 function defaultDate(): string {
   const d = new Date();
@@ -245,7 +261,7 @@ function defaultDate(): string {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     padding: spacing.lg,
     paddingBottom: spacing.sm,
@@ -254,7 +270,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   addBtn: {
-    backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -273,11 +288,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
     flexShrink: 0,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   modalOverlay: {
@@ -286,7 +298,6 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalSheet: {
-    backgroundColor: colors.surface,
     padding: spacing.lg,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
@@ -305,13 +316,10 @@ const styles = StyleSheet.create({
   },
   textarea: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     padding: spacing.md,
     minHeight: 80,
     textAlignVertical: "top",
     fontSize: 15,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
   },
 });

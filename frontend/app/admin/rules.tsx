@@ -13,11 +13,13 @@ import { Stack, useRouter } from "expo-router";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function RulesAdmin() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [cfg, setCfg] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
@@ -120,11 +122,11 @@ export default function RulesAdmin() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>{t("dynamic_rules")}</H2>
         <View style={{ width: 22 }} />
@@ -386,7 +388,7 @@ const RowGrid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

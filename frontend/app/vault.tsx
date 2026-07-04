@@ -6,11 +6,13 @@ import { Stack, useRouter } from "expo-router";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, formatDate, spacing } from "@/src/ui/theme";
+import { formatDate, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function VaultScreen() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -44,11 +46,11 @@ export default function VaultScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ title: "Vault", headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>Vault</H2>
         <View style={{ width: 22 }} />
@@ -72,7 +74,7 @@ export default function VaultScreen() {
         {documents.map((d) => (
           <TouchableOpacity key={d.id} onPress={() => openUrl(d.url)}>
             <Card style={styles.docCard}>
-              <Ionicons name="document-outline" size={24} color={colors.primary_accent} />
+              <Ionicons name="document-outline" size={24} color={colors.accent} />
               <View style={{ flex: 1 }}>
                 <Body style={{ fontWeight: "700" }}>{d.title}</Body>
                 <Muted style={{ fontSize: 12 }}>{formatDate(d.created_at)}</Muted>
@@ -88,7 +90,7 @@ export default function VaultScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -234,16 +234,6 @@ class CheckOutIn(BaseModel):
     longitude: Optional[float] = None
 
 
-class ManualAttendanceIn(BaseModel):
-    user_id: str
-    check_in_iso: str  # ISO datetime of arrival
-    reason: str
-
-
-class ArrivalConfirmationIn(BaseModel):
-    confirmed_arrival_at: str  # ISO datetime
-
-
 class LatenessReviewIn(BaseModel):
     penalty_type: Literal["lateness_quota", "leave_day", "emergency_quota"]
 
@@ -1001,95 +991,6 @@ async def check_out(payload: CheckOutIn, user: Dict = Depends(get_current_user))
     return att
 
 
-@api.post("/attendance/manual")
-async def manual_attendance(payload: ManualAttendanceIn, actor: Dict = Depends(require_supervisor_or_admin)):
-    cfg = await get_config()
-    check_in_dt = datetime.fromisoformat(payload.check_in_iso)
-    if check_in_dt.tzinfo is None:
-        check_in_dt = check_in_dt.replace(tzinfo=WIB)
-    now = now_wib()
-    # 2-hour arrival limit — arrival must be within last 2 hours
-    if abs((now - check_in_dt).total_seconds()) > cfg["manual_arrival_limit_hours"] * 3600:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Absensi manual hanya untuk kedatangan dalam {cfg['manual_arrival_limit_hours']} jam terakhir",
-        )
-    target = await db.users.find_one({"id": payload.user_id})
-    if not target:
-        raise HTTPException(status_code=404, detail="User tidak ditemukan")
-    date_str = check_in_dt.strftime("%Y-%m-%d")
-    existing = await db.attendance.find_one({"user_id": payload.user_id, "date": date_str})
-    if existing:
-        raise HTTPException(status_code=400, detail="User sudah punya absensi hari ini")
-
-    shift_start_t = parse_hhmm(cfg["shift_start"])
-    shift_start_dt = check_in_dt.replace(hour=shift_start_t.hour, minute=shift_start_t.minute, second=0, microsecond=0)
-    if check_in_dt < shift_start_dt:
-        effective_shift_end = check_in_dt + timedelta(hours=cfg["shift_duration_hours"])
-        late_result = {"is_late": False, "late_minutes": 0, "fine": 0, "tier": None}
-        is_early = True
-    else:
-        shift_end_t = parse_hhmm(cfg["shift_end"])
-        effective_shift_end = check_in_dt.replace(hour=shift_end_t.hour, minute=shift_end_t.minute, second=0, microsecond=0)
-        minutes_past = minutes_between(shift_start_dt, check_in_dt)
-        late_result = compute_late_fine(minutes_past, cfg)
-        is_early = False
-
-    on_time_bonus = cfg["on_time_bonus"] if not late_result["is_late"] else 0
-    penalty_amount = late_result["fine"]
-    leave_deduction = 0
-
-    if late_result["is_late"]:
-        # 3rd Lateness Rule
-        month = date_str[:7]
-        late_count_this_month = await db.attendance.count_documents(
-            {"user_id": payload.user_id, "is_late": True, "date": {"$regex": f"^{month}"}}
-        )
-        if late_count_this_month == 2:
-            penalty_amount = 0
-            leave_deduction = 1
-
-    doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": payload.user_id,
-        "date": date_str,
-        "check_in_at": check_in_dt.isoformat(),
-        "warehouse_id": target.get("warehouse_id"),
-        "warehouse_name": None,
-        "effective_shift_end": effective_shift_end.isoformat(),
-        "is_early_check_in": is_early,
-        "is_late": late_result["is_late"],
-        "late_minutes": late_result["late_minutes"],
-        "penalty_amount": penalty_amount,
-        "leave_deduction": leave_deduction,
-        "late_tier": late_result["tier"],
-        "on_time_bonus": on_time_bonus,
-        "overtime_minutes": 0,
-        "overtime_amount": 0,
-        "check_out_at": None,
-        "early_departure": False,
-        "status": "checked_in",
-        "manual": True,
-        "manual_reason": payload.reason,
-        "arrival_limit_at": (check_in_dt + timedelta(hours=2)).isoformat(),
-        "arrival_confirmed_at": None,
-        "arrival_status": "pending",
-        "approved_by": actor["id"],
-        "approved_by_name": actor["name"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.attendance.insert_one(doc)
-    await bump_user_stats(
-        payload.user_id,
-        month_wib_str(),
-        total_penalty=penalty_amount,
-        total_bonus=on_time_bonus,
-        leave_count=leave_deduction,
-    )
-    doc.pop("_id", None)
-    return doc
-
-
 @api.post("/attendance/{att_id}/review-lateness")
 async def review_lateness(att_id: str, payload: LatenessReviewIn, actor: Dict = Depends(require_supervisor_or_admin)):
     att = await db.attendance.find_one({"id": att_id})
@@ -1131,7 +1032,11 @@ async def review_location(att_id: str, payload: Dict[str, bool], actor: Dict = D
         raise HTTPException(status_code=404, detail="Attendance record not found")
 
     approve = payload.get("approve", False)
-    new_status = "checked_in" if approve else "rejected"
+    # If it's a check-out (completed) record being reviewed
+    if att.get("check_out_at"):
+        new_status = "completed" if approve else "rejected"
+    else:
+        new_status = "checked_in" if approve else "rejected"
 
     await db.attendance.update_one({"id": att_id}, {"$set": {"status": new_status}})
     return {"ok": True, "status": new_status}

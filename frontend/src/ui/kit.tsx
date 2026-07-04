@@ -61,6 +61,7 @@ export const Button: React.FC<BtnProps> = ({
   ...rest
 }) => {
   const { colors } = useTheme();
+  const isOutline = variant === "outline";
   const bg =
     variant === "primary"
       ? colors.accent
@@ -69,9 +70,9 @@ export const Button: React.FC<BtnProps> = ({
         : variant === "success"
           ? colors.success
           : "transparent";
-  const border = variant === "outline" ? colors.border : "transparent";
-  const color = "#fff";
-  const height = size === "sm" ? 40 : size === "lg" ? 56 : 48;
+  const border = isOutline ? colors.accent : "transparent";
+  const color = isOutline ? colors.accent : "#fff";
+  const height = size === "sm" ? 36 : size === "lg" ? 56 : 48;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -132,22 +133,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     padding: spacing.lg,
-    // Deeper premium feel
+    // Modern premium feel
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     fontSize: 15,
-    backgroundColor: colors.surface,
-    color: colors.textPrimary,
     minHeight: 48,
   },
 });

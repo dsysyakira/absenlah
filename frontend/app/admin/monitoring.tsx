@@ -7,11 +7,13 @@ import { WebView } from "react-native-webview";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function CourierMonitoringScreen() {
   const { t } = useI18n();
+  const { colors, theme } = useTheme();
   const router = useRouter();
   const [couriers, setCouriers] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -49,7 +51,8 @@ export default function CourierMonitoringScreen() {
         <div id="map"></div>
         <script>
           var map = L.map('map', { zoomControl: false }).setView([-6.2088, 106.8456], 12);
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          var style = "${theme === "dark" ? "dark_all" : "voyager"}";
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/' + style + '/{z}/{x}/{y}{r}.png', {
             subdomains: 'abcd',
             maxZoom: 20
           }).addTo(map);
@@ -83,11 +86,11 @@ export default function CourierMonitoringScreen() {
   `;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ title: "Monitoring", headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>Monitoring Kurir</H2>
         <View style={{ width: 22 }} />
@@ -130,7 +133,7 @@ export default function CourierMonitoringScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, paddingBottom: spacing.sm },
   scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: 40 },
   mapCard: { height: 300, padding: 0, margin: spacing.lg, overflow: "hidden" },

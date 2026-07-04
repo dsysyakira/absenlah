@@ -14,11 +14,13 @@ import { Stack, useRouter } from "expo-router";
 import { useI18n } from "@/src/i18n";
 import { api } from "@/src/api/client";
 import { Body, Button, Card, H2, H3, Input, Muted } from "@/src/ui/kit";
-import { colors, radii, spacing } from "@/src/ui/theme";
+import { radii, spacing } from "@/src/ui/theme";
+import { useTheme } from "@/src/ui/ThemeContext";
 import { showToast } from "@/src/ui/Toast";
 
 export default function UsersAdmin() {
   const { t } = useI18n();
+  const { colors } = useTheme();
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -104,14 +106,18 @@ export default function UsersAdmin() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]} edges={["top"]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} testID="back-button">
-          <Ionicons name="arrow-back" size={22} color={colors.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <H2>{t("manage_users")}</H2>
-        <TouchableOpacity onPress={openAdd} testID="add-user-button" style={styles.addBtn}>
+        <TouchableOpacity
+          onPress={openAdd}
+          testID="add-user-button"
+          style={[styles.addBtn, { backgroundColor: colors.primary }]}
+        >
           <Ionicons name="add" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -126,7 +132,7 @@ export default function UsersAdmin() {
                   @{u.username} • {u.position} • {u.division}
                 </Muted>
               </View>
-              <View style={[styles.roleBadge, { backgroundColor: roleColor(u.role) }]}>
+              <View style={[styles.roleBadge, { backgroundColor: roleColor(u.role, colors) }]}>
                 <Body style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
                   {u.role.toUpperCase()}
                 </Body>
@@ -166,7 +172,7 @@ export default function UsersAdmin() {
         <View style={styles.overlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={styles.sheet}
+            style={[styles.sheet, { backgroundColor: colors.surface }]}
           >
             <ScrollView contentContainerStyle={{ gap: spacing.md }}>
               <View style={styles.row}>
@@ -216,7 +222,14 @@ export default function UsersAdmin() {
                   <TouchableOpacity
                     key={r}
                     onPress={() => setForm({ ...form, role: r })}
-                    style={[styles.chip, form.role === r && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      { borderColor: colors.border },
+                      form.role === r && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                      },
+                    ]}
                     testID={`role-chip-${r}`}
                   >
                     <Body
@@ -237,7 +250,14 @@ export default function UsersAdmin() {
                   <TouchableOpacity
                     key={w.id}
                     onPress={() => setForm({ ...form, warehouse_id: w.id })}
-                    style={[styles.chip, form.warehouse_id === w.id && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      { borderColor: colors.border },
+                      form.warehouse_id === w.id && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                      },
+                    ]}
                     testID={`warehouse-chip-${w.id}`}
                   >
                     <Body
@@ -267,14 +287,14 @@ export default function UsersAdmin() {
   );
 }
 
-function roleColor(role: string): string {
-  if (role === "admin") return colors.danger;
-  if (role === "supervisor") return colors.warning;
-  return colors.info;
+function roleColor(role: string, themeColors: any): string {
+  if (role === "admin") return themeColors.danger;
+  if (role === "supervisor") return themeColors.warning;
+  return themeColors.info;
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -283,7 +303,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   addBtn: {
-    backgroundColor: colors.primary,
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -299,7 +318,6 @@ const styles = StyleSheet.create({
   },
   overlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: colors.surface,
     padding: spacing.lg,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
@@ -310,8 +328,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   label: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },
 });
